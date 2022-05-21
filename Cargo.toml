@@ -4,7 +4,10 @@ version = "0.1.0"
 authors = ["ocfbnj"]
 edition = "2021"
 description = "An unofficial shadowsocks implementation that can work with official shadowsocks."
+readme = "README.md"
+homepage = "https://github.com/ocfbnj/ss-rs"
 repository = "https://github.com/ocfbnj/ss-rs"
+license-file = "LICENSE"
 keywords = ["shadowocks", "socks5", "firewall", "proxy", "socks"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -39,6 +42,3 @@ chacha20poly1305 = "0.9.0"
 # logging
 log = "0.4.17"
 env_logger = "0.9.0"
-
-[dev-dependencies]
-hex = "0.4.3"
