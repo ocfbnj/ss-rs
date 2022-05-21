@@ -1,62 +1,82 @@
-use std::io;
-
-use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    select,
-    sync::oneshot::{Receiver, Sender},
-    task::JoinHandle,
+use std::{
+    io::{self, ErrorKind},
+    time::Duration,
 };
+
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub const MAXIMUM_PAYLOAD_SIZE: usize = 0x3FFF;
 // const MAXIMUM_TAG_SIZE: usize = 16;
 // const MAXIMUM_MESSAGE_SIZE: usize = 2 + MAXIMUM_PAYLOAD_SIZE + 2 * MAXIMUM_TAG_SIZE;
 
-pub async fn copy<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
-    mut rd: R,
-    mut wr: W,
-) -> io::Result<usize> {
+/// Copies from reader to writer only once.
+///
+/// Returns the number of bytes copied.
+#[inline]
+pub async fn copy_once<R, W>(reader: &mut R, writer: &mut W) -> io::Result<usize>
+where
+    R: AsyncRead + Unpin + ?Sized,
+    W: AsyncWrite + Unpin + ?Sized,
+{
     let mut payload = [0u8; MAXIMUM_PAYLOAD_SIZE];
-    let mut bytes_transferred = 0;
 
-    loop {
-        let n = rd.read(&mut payload).await?;
-        if n == 0 {
-            return Ok(bytes_transferred);
-        }
-
-        wr.write_all(&payload[..n]).await?;
-
-        bytes_transferred += n;
+    let bytes_copied = reader.read(&mut payload).await?;
+    if bytes_copied != 0 {
+        writer.write_all(&payload[..bytes_copied]).await?;
     }
+
+    Ok(bytes_copied)
 }
 
-pub fn transfer<R: AsyncRead + Unpin + Send + 'static, W: AsyncWrite + Unpin + Send + 'static>(
-    name: String,
-    tx: Sender<()>,
-    rx: Receiver<()>,
-    mut rd: R,
-    mut wr: W,
-) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        select! {
-            _ = rx => {
-                log::trace!("Transfer received exit signal: {}", name);
+/// Transfers bidirectionally the payload between A and B.
+///
+/// Returns (A to B bytes_transferred, B to A bytes_transferred).
+pub async fn transfer_between<A, B>(a: A, b: B, timeout: Duration) -> io::Result<(usize, usize)>
+where
+    A: AsyncRead + AsyncWrite + Send,
+    B: AsyncRead + AsyncWrite + Send,
+{
+    let (mut ra, mut wa) = tokio::io::split(a);
+    let (mut rb, mut wb) = tokio::io::split(b);
+
+    let mut atob = 0;
+    let mut btoa = 0;
+
+    let mut atob_done = false;
+    let mut btoa_done = false;
+
+    while !atob_done || !btoa_done {
+        tokio::select! {
+            _ = tokio::time::sleep(timeout) => {
+                return Err(
+                    io::Error::new(
+                        ErrorKind::TimedOut,
+                        format!("there are no data in the past {} seconds", timeout.as_secs())
+                    )
+                );
             }
-            res = copy(&mut rd, &mut wr) => {
+            res = copy_once(&mut ra, &mut wb), if atob_done == false => {
                 match res {
-                    Ok(n) => log::trace!("Transfer end up with {} bytes: {}", n, name),
-                    Err(e) => {
-                        if e.kind() == io::ErrorKind::Other {
-                            log::error!("Transfer {} error: {}", name, e);
-                        } else {
-                            log::debug!("Transfer {} error: {}", name, e);
-                        }
-                    },
-                };
+                    Ok(0) => {
+                        atob_done = true;
+                        wb.shutdown().await.unwrap_or_default();
+                    }
+                    Ok(n) => atob += n,
+                    Err(e) => return Err(e),
+                }
+            }
+            res = copy_once(&mut rb, &mut wa), if btoa_done == false => {
+                match res {
+                    Ok(0) => {
+                        btoa_done = true;
+                        wa.shutdown().await.unwrap_or_default();
+                    }
+                    Ok(n) => btoa += n,
+                    Err(e) => return Err(e),
+                }
             }
         }
+    }
 
-        tx.send(()).unwrap_or_default();
-        wr.shutdown().await.unwrap_or_default();
-    })
+    Ok((atob, btoa))
 }
