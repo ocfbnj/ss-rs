@@ -6,7 +6,7 @@ edition = "2021"
 description = "An unofficial shadowsocks implementation that can work with official shadowsocks."
 readme = "README.md"
 repository = "https://github.com/ocfbnj/ss-rs"
-license-file = "LICENSE"
+license = "MIT"
 keywords = ["shadowocks", "ss", "socks", "firewall", "proxy"]
 categories = ["command-line-utilities"]
 
