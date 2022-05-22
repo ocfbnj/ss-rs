@@ -1,4 +1,5 @@
 use std::{
+    fmt::{self, Display, Formatter},
     io,
     pin::Pin,
     sync::Arc,
@@ -219,11 +220,7 @@ impl EncryptedTcpStream {
 
         if let Some(salt) = self.incoming_salt.take() {
             if !self.ctx.check_replay(&salt) {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "duplicate salt received, possible replay attack",
-                ))
-                .into();
+                return Err(io::Error::new(io::ErrorKind::Other, Error::DuplicateSalt)).into();
             }
         }
 
@@ -389,33 +386,60 @@ impl AsyncWrite for EncryptedTcpStream {
 
 impl EncryptedTcpStream {
     fn encrypt(&mut self, plaintext: &[u8]) -> io::Result<Vec<u8>> {
-        if let Ok(data) = self
+        match self
             .enc_cipher
             .as_ref()
             .expect("no salt received")
             .encrypt(&self.enc_nonce, plaintext)
         {
-            self.enc_nonce.increment();
-            return Ok(data);
+            Ok(data) => {
+                self.enc_nonce.increment();
+                Ok(data)
+            }
+            Err(_) => Err(io::Error::new(io::ErrorKind::Other, Error::Encryption)),
         }
-
-        Err(io::Error::new(io::ErrorKind::Other, "encryption error"))
     }
 
     fn decrypt(&mut self, ciphertext: &[u8]) -> io::Result<Vec<u8>> {
-        if let Ok(data) = self
+        match self
             .dec_cipher
             .as_ref()
             .expect("no salt received")
             .decrypt(&self.dec_nonce, ciphertext)
         {
-            self.dec_nonce.increment();
-            return Ok(data);
+            Ok(data) => {
+                self.dec_nonce.increment();
+                Ok(data)
+            }
+            Err(_) => Err(io::Error::new(io::ErrorKind::Other, Error::Decryption)),
         }
-
-        Err(io::Error::new(io::ErrorKind::Other, "decryption error"))
     }
 }
+
+/// Errors during shadowsocks communication.
+#[derive(Debug)]
+pub enum Error {
+    /// Encryption error.
+    Encryption,
+
+    /// Decryption error.
+    Decryption,
+
+    /// Duplicate salt received, possible replay attack.
+    DuplicateSalt,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::Encryption => write!(f, "encryption error"),
+            Error::Decryption => write!(f, "decryption error"),
+            Error::DuplicateSalt => write!(f, "duplicate salt received, possible replay attack"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 enum ReadState {
     ReadSalt,
