@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 use clap::Parser;
 
@@ -25,4 +25,8 @@ pub struct Args {
     /// chacha20-ietf-poly1305
     #[clap(short = 'm', long, default_value = "chacha20-ietf-poly1305")]
     pub method: Method,
+
+    /// Access control list
+    #[clap(long = "acl")]
+    pub acl_path: Option<PathBuf>,
 }

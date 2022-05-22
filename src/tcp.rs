@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 
 use crate::{
     context::Ctx,
@@ -25,7 +25,7 @@ pub async fn ss_remote(
     key: Vec<u8>,
     ctx: Arc<Ctx>,
 ) -> io::Result<()> {
-    let listener = EncryptedTcpListener::bind(addr, method, &key, ctx).await?;
+    let listener = EncryptedTcpListener::bind(addr, method, &key, ctx.clone()).await?;
 
     log::info!("ss-remote listening on {}", addr);
 
@@ -33,7 +33,7 @@ pub async fn ss_remote(
         match listener.accept().await {
             Ok((encrypted_stream, peer)) => {
                 log::debug!("Accept {}", peer);
-                tokio::spawn(handle_ss_remote(encrypted_stream, peer));
+                tokio::spawn(handle_ss_remote(encrypted_stream, peer, ctx.clone()));
             }
             Err(e) => log::warn!("Accept error: {}", e),
         }
@@ -71,7 +71,13 @@ pub async fn ss_local(
     }
 }
 
-async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr) {
+async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr, ctx: Arc<Ctx>) {
+    // Checks whether or not to reject the client
+    if ctx.is_bypass(peer.ip(), None) {
+        log::warn!("Reject the client: peer {}", peer);
+        return;
+    }
+
     // Constructs a socks5 address with timeout
     let result = tokio::time::timeout(Duration::from_secs(15), Socks5Addr::construct(&mut stream));
     let target_addr = match result.await {
@@ -89,27 +95,51 @@ async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr) {
         }
     };
 
-    log::debug!("Request target address: {} -> {}", peer, target_addr);
+    // Resolves target socket address
+    let target_socket_addr = match tokio::net::lookup_host(target_addr.to_string()).await {
+        Ok(mut iter) => iter.next().unwrap(),
+        Err(e) => {
+            log::warn!("Resolve {} failed: {}, peer {}", target_addr, e, peer);
+            return;
+        }
+    };
+    let target_ip = target_socket_addr.ip();
+
+    // Checks whether or not to block outbound
+    if ctx.is_block_outbound(target_ip, Some(&target_addr.to_string())) {
+        log::warn!(
+            "Block outbound address: {} -> {} ({})",
+            peer,
+            target_addr,
+            target_ip
+        );
+        return;
+    }
+
+    log::debug!(
+        "Allow outbound address: {} -> {} ({})",
+        peer,
+        target_addr,
+        target_ip
+    );
 
     // Connects to target address
-    let target_stream = match TcpStream::connect(target_addr.to_string()).await {
+    let target_stream = match TcpStream::connect(target_socket_addr).await {
         Ok(stream) => stream,
         Err(e) => {
-            log::debug!("Unable to connect to {}: {}", target_addr, e);
+            log::debug!(
+                "Unable to connect to {} ({}): {}",
+                target_addr,
+                target_ip,
+                e
+            );
             return;
         }
     };
 
-    let trans = format!("{} <=> {}", peer, target_addr);
-
     // Establishes connection between peer and target
-    match transfer_between(stream, target_stream, Duration::from_secs(60)).await {
-        Ok((atob, btoa)) => log::trace!("{} done: ltor {} bytes, rtol {} bytes", trans, atob, btoa),
-        Err(e) => match e.kind() {
-            ErrorKind::Other => log::warn!("{} error: {}", trans, e),
-            _ => log::debug!("{} error: {}", trans, e),
-        },
-    }
+    let trans = format!("{} <=> {} ({})", peer, target_addr, target_ip);
+    transfer(stream, target_stream, &trans).await;
 }
 
 async fn handle_ss_local(
@@ -137,32 +167,83 @@ async fn handle_ss_local(
         }
     };
 
-    log::debug!("Request target address: {} -> {}", peer, target_addr);
-
-    // Connects to ss-remote
-    let mut target_stream = match EncryptedTcpStream::connect(remote_addr, method, &key, ctx).await
-    {
-        Ok(stream) => stream,
+    // Resolves target socket address
+    let target_socket_addr = match tokio::net::lookup_host(target_addr.to_string()).await {
+        Ok(mut iter) => iter.next().unwrap(),
         Err(e) => {
-            log::error!("Unable to connect to {}: {}", remote_addr, e);
+            log::warn!("Resolve {} failed: {}, peer {}", target_addr, e, peer);
             return;
         }
     };
+    let target_ip = target_socket_addr.ip();
 
-    // Writes target address
-    let target_addr_bytes = target_addr.get_raw_parts();
-    match target_stream.write_all(&target_addr_bytes).await {
-        Ok(_) => {}
-        Err(e) => {
-            log::error!("Write target address to {} failed: {}", remote_addr, e);
-            return;
+    let trans = format!("{} <=> {} ({})", peer, target_addr, target_ip);
+    match ctx.is_bypass(target_ip, None) {
+        true => {
+            log::debug!(
+                "Bypass target address: {} -> {} ({})",
+                peer,
+                target_addr,
+                target_ip
+            );
+
+            // Connects to target host
+            let target_stream = match TcpStream::connect(target_socket_addr).await {
+                Ok(stream) => stream,
+                Err(e) => {
+                    log::error!(
+                        "Unable to connect to {} ({}): {}",
+                        target_addr,
+                        target_ip,
+                        e
+                    );
+                    return;
+                }
+            };
+
+            // Establishes connection between peer and target
+            transfer(stream, target_stream, &trans).await;
+        }
+        false => {
+            log::debug!(
+                "Proxy target address: {} -> {} ({})",
+                peer,
+                target_addr,
+                target_ip
+            );
+
+            // Connects to ss-remote
+            let mut target_stream =
+                match EncryptedTcpStream::connect(remote_addr, method, &key, ctx).await {
+                    Ok(stream) => stream,
+                    Err(e) => {
+                        log::error!("Unable to connect to {}: {}", remote_addr, e);
+                        return;
+                    }
+                };
+
+            // Writes target address
+            let target_addr_bytes = target_addr.get_raw_parts();
+            match target_stream.write_all(&target_addr_bytes).await {
+                Ok(_) => {}
+                Err(e) => {
+                    log::error!("Write target address to {} failed: {}", remote_addr, e);
+                    return;
+                }
+            }
+
+            // Establishes connection between peer and target
+            transfer(stream, target_stream, &trans).await;
         }
     }
+}
 
-    let trans = format!("{} <=> {}", peer, target_addr);
-
-    // Establishes connection between peer and target
-    match transfer_between(stream, target_stream, Duration::from_secs(60)).await {
+async fn transfer<A, B>(a: A, b: B, trans: &str)
+where
+    A: AsyncRead + AsyncWrite + Send,
+    B: AsyncRead + AsyncWrite + Send,
+{
+    match transfer_between(a, b, Duration::from_secs(90)).await {
         Ok((atob, btoa)) => log::trace!("{} done: ltor {} bytes, rtol {} bytes", trans, atob, btoa),
         Err(e) => match e.kind() {
             ErrorKind::Other => log::warn!("{} error: {}", trans, e),

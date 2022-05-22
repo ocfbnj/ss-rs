@@ -11,7 +11,7 @@ use std::{
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 
-use self::{socks4::Socks4Addr, socks5::Socks5Addr};
+use crate::socks::{socks4::Socks4Addr, socks5::Socks5Addr};
 
 /// Errors when handle SOCKS protocols.
 #[derive(Debug)]
