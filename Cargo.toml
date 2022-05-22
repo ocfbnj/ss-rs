@@ -1,6 +1,6 @@
 [package]
 name = "ss-rs"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["ocfbnj"]
 edition = "2021"
 description = "An unofficial shadowsocks implementation that can work with official shadowsocks."
@@ -8,7 +8,7 @@ readme = "README.md"
 homepage = "https://github.com/ocfbnj/ss-rs"
 repository = "https://github.com/ocfbnj/ss-rs"
 license-file = "LICENSE"
-keywords = ["shadowocks", "socks5", "firewall", "proxy", "socks"]
+keywords = ["shadowocks", "ss", "socks", "firewall", "proxy"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
