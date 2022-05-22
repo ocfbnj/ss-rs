@@ -153,7 +153,10 @@ async fn handle_ss_local(
     let target_addr_bytes = target_addr.get_raw_parts();
     match target_stream.write_all(&target_addr_bytes).await {
         Ok(_) => {}
-        Err(e) => log::error!("Write target address to {} failed: {}", remote_addr, e),
+        Err(e) => {
+            log::error!("Write target address to {} failed: {}", remote_addr, e);
+            return;
+        }
     }
 
     let trans = format!("{} <=> {}", peer, target_addr);
