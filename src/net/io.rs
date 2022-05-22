@@ -5,6 +5,7 @@ use std::{
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+/// The maximum payload size of shadowsocks.
 pub const MAXIMUM_PAYLOAD_SIZE: usize = 0x3FFF;
 // const MAXIMUM_TAG_SIZE: usize = 16;
 // const MAXIMUM_MESSAGE_SIZE: usize = 2 + MAXIMUM_PAYLOAD_SIZE + 2 * MAXIMUM_TAG_SIZE;
@@ -30,7 +31,7 @@ where
 
 /// Transfers bidirectionally the payload between A and B.
 ///
-/// Returns (A to B bytes_transferred, B to A bytes_transferred).
+/// Returns (A to B bytes transferred, B to A byte stransferred).
 pub async fn transfer_between<A, B>(a: A, b: B, timeout: Duration) -> io::Result<(usize, usize)>
 where
     A: AsyncRead + AsyncWrite + Send,

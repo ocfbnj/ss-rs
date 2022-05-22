@@ -2,8 +2,9 @@ use std::net::SocketAddr;
 
 use clap::Parser;
 
-use crate::crypto::cipher::Method;
+use ss_rs::crypto::cipher::Method;
 
+/// Command-line parameter definitions for the ss-rs program.
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {

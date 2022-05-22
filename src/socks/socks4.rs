@@ -6,8 +6,9 @@ use std::{
 
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 
-use super::Error;
+use crate::socks::Error;
 
+/// SOCKS4 protocol related constants
 pub mod constants {
     pub const VERSION: u8 = 0x04;
 
@@ -15,13 +16,14 @@ pub mod constants {
     pub const COMMAND_CONNECT: u8 = 0x01;
 }
 
-/// Represents a SOCKS4/4a address.
+/// Represents a SOCKS4a address.
 pub enum Socks4Addr {
     Ipv4(SocketAddrV4),
     DomainName((String, u16)),
 }
 
 impl Socks4Addr {
+    /// Constructs a new SOCKS4 address from a async input stream.
     pub async fn construct<R>(reader: &mut R) -> io::Result<Self>
     where
         R: AsyncRead + Unpin + ?Sized,

@@ -1,4 +1,7 @@
+/// Authenticated Encryption with Associated Data (AEAD) algorithms.
 pub mod aead;
+
+/// Shadowsocks ciphers.
 pub mod cipher;
 
 use std::ops::Deref;
@@ -6,6 +9,40 @@ use std::ops::Deref;
 use hkdf::Hkdf;
 use sha1::Sha1;
 
+/// A simple encapsulation of bytes array.
+#[derive(Debug)]
+pub struct Nonce {
+    value: Vec<u8>,
+}
+
+impl Nonce {
+    /// Creates a new nonce.
+    pub fn new(len: usize) -> Self {
+        Nonce {
+            value: vec![0; len],
+        }
+    }
+
+    /// Increment the nonce.
+    pub fn increment(&mut self) {
+        for i in 0..self.value.len() {
+            self.value[i] = self.value[i].wrapping_add(1);
+            if self.value[i] != 0 {
+                break;
+            }
+        }
+    }
+}
+
+impl Deref for Nonce {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+/// Produces a subkey that is cryptographically strong even if the input secret key is weak.
 pub fn hkdf_sha1(key: &[u8], salt: &[u8], subkey: &mut [u8]) {
     let hkdf = Hkdf::<Sha1>::new(Some(salt), key);
     hkdf.expand(b"ss-subkey", subkey).expect(&format!(
@@ -15,6 +52,7 @@ pub fn hkdf_sha1(key: &[u8], salt: &[u8], subkey: &mut [u8]) {
     ));
 }
 
+/// Generates the master key from a password.
 pub fn derive_key(password: &[u8], key: &mut [u8]) {
     let key_size = key.len();
     let mut md_buf: Vec<u8> = Vec::new();
@@ -34,36 +72,6 @@ pub fn derive_key(password: &[u8], key: &mut [u8]) {
         }
 
         md_buf = md.to_vec();
-    }
-}
-
-#[derive(Debug)]
-pub struct Nonce {
-    value: Vec<u8>,
-}
-
-impl Nonce {
-    pub fn new(len: usize) -> Self {
-        Nonce {
-            value: vec![0; len],
-        }
-    }
-
-    pub fn increment(&mut self) {
-        for i in 0..self.value.len() {
-            self.value[i] = self.value[i].wrapping_add(1);
-            if self.value[i] != 0 {
-                break;
-            }
-        }
-    }
-}
-
-impl Deref for Nonce {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
     }
 }
 

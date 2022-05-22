@@ -13,7 +13,10 @@ use tokio::{
 
 use crate::{
     context::Ctx,
-    crypto::{aead::Cipher, cipher::Method, hkdf_sha1, Nonce},
+    crypto::{
+        cipher::{Cipher, Method},
+        hkdf_sha1, Nonce,
+    },
     net::{buf::OwnedReadBuf, io::MAXIMUM_PAYLOAD_SIZE},
 };
 
@@ -22,7 +25,7 @@ pub struct TcpStream {
 }
 
 impl TcpStream {
-    pub(crate) fn new(inner_stream: TokioTcpStream) -> Self {
+    pub fn new(inner_stream: TokioTcpStream) -> Self {
         TcpStream { inner_stream }
     }
 
@@ -65,20 +68,6 @@ impl AsyncWrite for TcpStream {
     }
 }
 
-enum ReadState {
-    ReadSalt,
-    ReadLength,
-    ReadPayload(usize),
-    ReadPayloadOut,
-}
-
-enum WriteState {
-    WriteSalt,
-    WriteLength,
-    WritePayload,
-    WritePayloadOut,
-}
-
 pub struct EncryptedTcpStream {
     inner_stream: TokioTcpStream,
 
@@ -105,7 +94,7 @@ pub struct EncryptedTcpStream {
 }
 
 impl EncryptedTcpStream {
-    pub(crate) fn new(
+    pub fn new(
         inner_stream: TokioTcpStream,
         cipher_method: Method,
         cipher_key: &[u8],
@@ -259,7 +248,7 @@ impl EncryptedTcpStream {
         }
 
         while !self.read_buf.is_full() {
-            let mut read_buf = ReadBuf::new(self.read_buf.get_remaining_mut());
+            let mut read_buf = ReadBuf::new(self.read_buf.get_unfilled());
             let remaining = read_buf.remaining();
 
             ready!(Pin::new(&mut self.inner_stream).poll_read(cx, &mut read_buf))?;
@@ -276,7 +265,7 @@ impl EncryptedTcpStream {
             self.read_buf.advance(nread);
         }
 
-        buf.copy_from_slice(self.read_buf.get());
+        buf.copy_from_slice(self.read_buf.get_filled());
 
         Ok(()).into()
     }
@@ -426,4 +415,18 @@ impl EncryptedTcpStream {
 
         Err(io::Error::new(io::ErrorKind::Other, "decryption error"))
     }
+}
+
+enum ReadState {
+    ReadSalt,
+    ReadLength,
+    ReadPayload(usize),
+    ReadPayloadOut,
+}
+
+enum WriteState {
+    WriteSalt,
+    WriteLength,
+    WritePayload,
+    WritePayloadOut,
 }

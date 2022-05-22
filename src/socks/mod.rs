@@ -1,3 +1,9 @@
+/// SOCKS4a protocol implementation.
+pub mod socks4;
+
+/// SOCKS5 protocol implementation.
+pub mod socks5;
+
 use std::{
     fmt::{self, Display, Formatter},
     io,
@@ -7,25 +13,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 
 use self::{socks4::Socks4Addr, socks5::Socks5Addr};
 
-pub mod socks4;
-pub mod socks5;
-
-/// Represents a SOCKS address.
-pub enum SocksAddr {
-    Socks4Addr(Socks4Addr),
-    Socks5Addr(Socks5Addr),
-}
-
-impl Display for SocksAddr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            SocksAddr::Socks4Addr(socks4) => write!(f, "{}", socks4),
-            SocksAddr::Socks5Addr(socks5) => write!(f, "{}", socks5),
-        }
-    }
-}
-
-/// Errors when handle SOCKS protocol.
+/// Errors when handle SOCKS protocols.
 #[derive(Debug)]
 pub enum Error {
     /// Unsupported socks version.
@@ -44,8 +32,6 @@ pub enum Error {
     DomainName,
 }
 
-impl std::error::Error for Error {}
-
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -60,6 +46,23 @@ impl Display for Error {
             Error::Method => write!(f, "only support the NO AUTHENTICATION method"),
             Error::Command(cmd) => write!(f, "only support the CONNECT method, request {}", cmd),
             Error::DomainName => write!(f, "the requested domain name is not a string."),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+/// Represents a SOCKS address.
+pub enum SocksAddr {
+    Socks4Addr(Socks4Addr),
+    Socks5Addr(Socks5Addr),
+}
+
+impl Display for SocksAddr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            SocksAddr::Socks4Addr(socks4) => write!(f, "{}", socks4),
+            SocksAddr::Socks5Addr(socks5) => write!(f, "{}", socks5),
         }
     }
 }

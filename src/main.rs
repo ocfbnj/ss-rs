@@ -1,13 +1,16 @@
+mod args;
+
 use std::sync::Arc;
 
 use clap::Parser;
 
 use ss_rs::{
-    args::Args,
     context::Ctx,
     crypto::derive_key,
     tcp::{ss_local, ss_remote},
 };
+
+use args::Args;
 
 #[tokio::main]
 async fn main() {

@@ -8,6 +8,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::socks::{socks4::Socks4Addr, Error, SocksAddr};
 
+/// SOCKS5 protocol related constants
 pub mod constants {
     pub const VERSION: u8 = 0x05;
 
@@ -31,6 +32,7 @@ pub enum Socks5Addr {
 }
 
 impl Socks5Addr {
+    /// Constructs a new SOCKS5 address from a async input stream.
     pub async fn construct<R>(reader: &mut R) -> io::Result<Self>
     where
         R: AsyncRead + Unpin + ?Sized,
@@ -144,7 +146,7 @@ impl From<SocksAddr> for Socks5Addr {
 /// SOCKS5 handshake.
 ///
 /// Notes: The first bytes is missing.
-pub(crate) async fn handshake<S>(stream: &mut S) -> io::Result<Socks5Addr>
+pub async fn handshake<S>(stream: &mut S) -> io::Result<Socks5Addr>
 where
     S: AsyncRead + AsyncWrite + Unpin + ?Sized,
 {

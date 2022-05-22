@@ -41,7 +41,7 @@ impl EncryptedTcpListener {
         let inner_listener = TokioTcpListener::bind(addr).await?;
         Ok(EncryptedTcpListener {
             inner_listener,
-            cipher_method: cipher_method,
+            cipher_method,
             cipher_key: cipher_key.to_owned(),
             ctx: ctx.clone(),
         })

@@ -39,17 +39,25 @@ impl Bloom {
     }
 }
 
+/// Replay attack protection that serves as a set.
 pub struct ReplayProtection {
     bloom: Mutex<Bloom>,
 }
 
 impl ReplayProtection {
+    /// Creates a new instance of the ReplayProtection.
     pub fn new() -> Self {
         ReplayProtection {
             bloom: Mutex::new(Bloom::new()),
         }
     }
 
+    /// Inserts a element to the set.
+    ///
+    /// Returns false if there is already a same element in the set,
+    /// and thus failed to insert.
+    ///
+    /// Returns true if the element was successfully inserted.
     pub fn check_and_insert(&self, element: &[u8]) -> bool {
         self.bloom.lock().check_and_insert(&element)
     }
