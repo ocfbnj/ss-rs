@@ -128,6 +128,22 @@ impl EncryptedTcpStream {
             ctx: ctx.clone(),
         }
     }
+
+    pub async fn connect<A: ToSocketAddrs>(
+        addr: A,
+        cipher_method: Method,
+        cipher_key: &[u8],
+        ctx: Arc<Ctx>,
+    ) -> io::Result<Self> {
+        let inner_stream = TokioTcpStream::connect(addr).await?;
+
+        Ok(EncryptedTcpStream::new(
+            inner_stream,
+            cipher_method,
+            cipher_key,
+            ctx,
+        ))
+    }
 }
 
 impl EncryptedTcpStream {

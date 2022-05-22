@@ -1,4 +1,4 @@
-use std::{io::Result, net::SocketAddr, sync::Arc};
+use std::{io, net::SocketAddr, sync::Arc};
 
 use tokio::net::{TcpListener as TokioTcpListener, ToSocketAddrs};
 
@@ -13,12 +13,12 @@ pub struct TcpListener {
 }
 
 impl TcpListener {
-    pub async fn bind<A: ToSocketAddrs>(addr: A) -> Result<Self> {
+    pub async fn bind<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
         let inner_listener = TokioTcpListener::bind(addr).await?;
         Ok(TcpListener { inner_listener })
     }
 
-    pub async fn accept(&self) -> Result<(TcpStream, SocketAddr)> {
+    pub async fn accept(&self) -> io::Result<(TcpStream, SocketAddr)> {
         let (stream, addr) = self.inner_listener.accept().await?;
         Ok((TcpStream::new(stream), addr))
     }
@@ -37,7 +37,7 @@ impl EncryptedTcpListener {
         cipher_method: Method,
         cipher_key: &[u8],
         ctx: Arc<Ctx>,
-    ) -> Result<Self> {
+    ) -> io::Result<Self> {
         let inner_listener = TokioTcpListener::bind(addr).await?;
         Ok(EncryptedTcpListener {
             inner_listener,
@@ -47,7 +47,7 @@ impl EncryptedTcpListener {
         })
     }
 
-    pub async fn accept(&self) -> Result<(EncryptedTcpStream, SocketAddr)> {
+    pub async fn accept(&self) -> io::Result<(EncryptedTcpStream, SocketAddr)> {
         let (stream, addr) = self.inner_listener.accept().await?;
         Ok((
             EncryptedTcpStream::new(

@@ -1,13 +1,29 @@
 use std::{
-    fmt::Display,
+    fmt::{self, Display, Formatter},
     io,
     net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6},
 };
 
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-// const VERSION: u8 = 0x05;
+use crate::socks::{socks4::Socks4Addr, Error, SocksAddr};
 
+pub mod constants {
+    pub const VERSION: u8 = 0x05;
+
+    // Atyp
+    pub const ATYP_IPV4: u8 = 0x01;
+    pub const ATYP_DOMAIN_NAME: u8 = 0x03;
+    pub const ATYP_IPV6: u8 = 0x04;
+
+    // Method
+    pub const METHOD_NO_AUTHENTICATION: u8 = 0x00;
+
+    // Command
+    pub const COMMAND_CONNECT: u8 = 0x01;
+}
+
+/// Represents a SOCKS5 address.
 pub enum Socks5Addr {
     Ipv4(SocketAddrV4),
     Ipv6(SocketAddrV6),
@@ -15,14 +31,16 @@ pub enum Socks5Addr {
 }
 
 impl Socks5Addr {
-    pub async fn construct<R: AsyncRead + Unpin + ?Sized>(reader: &mut R) -> io::Result<Self> {
+    pub async fn construct<R>(reader: &mut R) -> io::Result<Self>
+    where
+        R: AsyncRead + Unpin + ?Sized,
+    {
         let mut buf = [0u8];
         reader.read_exact(&mut buf).await?;
         let atyp = buf[0];
 
         match atyp {
-            // Ipv4
-            1 => {
+            constants::ATYP_IPV4 => {
                 let mut buf = [0u8; 6];
                 reader.read_exact(&mut buf).await?;
 
@@ -31,30 +49,25 @@ impl Socks5Addr {
 
                 Ok(Socks5Addr::Ipv4(SocketAddrV4::new(ipv4_addr, port)))
             }
-            // Domain name
-            3 => {
+            constants::ATYP_DOMAIN_NAME => {
                 let mut buf = [0u8];
                 reader.read_exact(&mut buf).await?;
                 let len = buf[0] as usize;
 
                 let mut buf = vec![0u8; len + 2];
                 reader.read_exact(&mut buf).await?;
-                let domain_name = match String::from_utf8(buf[..len].to_vec()) {
+
+                let domain_name_bytes = buf[..len].to_vec();
+                let domain_name = match String::from_utf8(domain_name_bytes) {
                     Ok(x) => x,
-                    Err(_) => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("{:?} is not a domain name", buf),
-                        ))
-                    }
+                    Err(_) => return Err(io::Error::new(io::ErrorKind::Other, Error::DomainName)),
                 };
 
                 let port = u16::from_be_bytes([buf[len], buf[len + 1]]);
 
                 Ok(Socks5Addr::DomainName((domain_name, port)))
             }
-            // Ipv6
-            4 => {
+            constants::ATYP_IPV6 => {
                 let mut buf = [0u8; 18];
                 reader.read_exact(&mut buf).await?;
 
@@ -78,14 +91,115 @@ impl Socks5Addr {
             )),
         }
     }
+
+    /// Returns SOCKS5 address raw representation.
+    pub fn get_raw_parts(&self) -> Vec<u8> {
+        let mut addr = Vec::<u8>::new();
+
+        match self {
+            Socks5Addr::Ipv4(v4) => {
+                addr.push(constants::ATYP_IPV4);
+                addr.append(&mut v4.ip().octets().to_vec());
+                addr.append(&mut v4.port().to_be_bytes().to_vec());
+            }
+            Socks5Addr::Ipv6(v6) => {
+                addr.push(constants::ATYP_IPV6);
+                addr.append(&mut v6.ip().octets().to_vec());
+                addr.append(&mut v6.port().to_be_bytes().to_vec());
+            }
+            Socks5Addr::DomainName((domain_name, port)) => {
+                addr.push(constants::ATYP_DOMAIN_NAME);
+                addr.push(domain_name.len() as u8);
+                addr.append(&mut domain_name.clone().into_bytes());
+                addr.append(&mut port.to_be_bytes().to_vec());
+            }
+        };
+
+        addr
+    }
 }
 
 impl Display for Socks5Addr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Socks5Addr::Ipv4(v4) => write!(f, "{}", v4.to_string()),
             Socks5Addr::Ipv6(v6) => write!(f, "{}", v6.to_string()),
             Socks5Addr::DomainName((host, port)) => write!(f, "{}:{}", host, port),
         }
     }
+}
+
+impl From<SocksAddr> for Socks5Addr {
+    fn from(addr: SocksAddr) -> Self {
+        match addr {
+            SocksAddr::Socks4Addr(addr) => match addr {
+                Socks4Addr::Ipv4(ipv4) => Socks5Addr::Ipv4(ipv4),
+                Socks4Addr::DomainName(domain_name) => Socks5Addr::DomainName(domain_name),
+            },
+            SocksAddr::Socks5Addr(addr) => addr,
+        }
+    }
+}
+
+/// SOCKS5 handshake.
+///
+/// Notes: The first bytes is missing.
+pub(crate) async fn handshake<S>(stream: &mut S) -> io::Result<Socks5Addr>
+where
+    S: AsyncRead + AsyncWrite + Unpin + ?Sized,
+{
+    // Stage 1
+    let mut n_methods = [0u8];
+    stream.read_exact(&mut n_methods).await?;
+
+    let mut methods = vec![0u8; n_methods[0] as usize];
+    stream.read_exact(&mut methods).await?;
+
+    if !methods
+        .iter()
+        .any(|&x| x == constants::METHOD_NO_AUTHENTICATION)
+    {
+        return Err(io::Error::new(io::ErrorKind::Other, Error::Method));
+    }
+
+    let rsp = [constants::VERSION, constants::METHOD_NO_AUTHENTICATION];
+    stream.write_all(&rsp).await?;
+
+    // Stage 2
+    let mut buf = [0u8; 3];
+    stream.read_exact(&mut buf).await?;
+
+    let ver = buf[0];
+    if ver != constants::VERSION {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            Error::VersionInconsistent {
+                now: ver,
+                before: 0x05,
+            },
+        ));
+    }
+
+    let cmd = buf[1];
+    if cmd != constants::COMMAND_CONNECT {
+        return Err(io::Error::new(io::ErrorKind::Other, Error::Command(cmd)));
+    }
+
+    let addr = Socks5Addr::construct(stream).await?;
+
+    let rsp = [
+        constants::VERSION,
+        0x00,
+        0x00,
+        constants::ATYP_IPV4,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+    ];
+    stream.write_all(&rsp).await?;
+
+    Ok(addr)
 }

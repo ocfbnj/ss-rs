@@ -1,15 +1,20 @@
-use std::{error::Error, sync::Arc};
+use std::sync::Arc;
 
 use clap::Parser;
 
-use ss_rs::{args::Args, context::Ctx, crypto::derive_key, tcp::ss_remote};
+use ss_rs::{
+    args::Args,
+    context::Ctx,
+    crypto::derive_key,
+    tcp::{ss_local, ss_remote},
+};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() {
     env_logger::init();
 
     let args = Args::parse();
-    let addr = args.remote_addr;
+    let remote_addr = args.remote_addr;
     let method = args.method;
     let password = args.password;
 
@@ -17,12 +22,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     derive_key(password.as_bytes(), &mut key);
     let ctx = Arc::new(Ctx::new());
 
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            Ok(())
-        },
-        res = ss_remote(addr, method, key, ctx) => {
-            res
-        },
+    if let Some(local_addr) = args.local_addr {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {},
+            res = ss_local(local_addr, remote_addr, method, key, ctx) => {
+                match res {
+                    Ok(_) => {}
+                    Err(e) => log::error!("Unable to start ss-local: {}", e),
+                }
+            },
+        }
+    } else {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {},
+            res = ss_remote(remote_addr, method, key, ctx) => {
+                match res {
+                    Ok(_) => {}
+                    Err(e) => log::error!("Unable to start ss-remote: {}", e),
+                }
+            },
+        }
     }
 }
