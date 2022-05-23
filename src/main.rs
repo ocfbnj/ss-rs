@@ -18,9 +18,16 @@ async fn main() {
     env_logger::init();
 
     let args = Args::parse();
-    let remote_addr = args.remote_addr;
     let method = args.method;
     let password = args.password;
+
+    let remote_addr = match ss_rs::net::io::lookup_host(&args.remote_addr).await {
+        Ok(addr) => addr,
+        Err(e) => {
+            log::error!("Resolve {} failed: {}", args.remote_addr, e);
+            return;
+        }
+    };
 
     let mut ctx = Ctx::new();
     if let Some(path) = args.acl_path {
@@ -41,6 +48,14 @@ async fn main() {
     let ctx = Arc::new(ctx);
 
     if let Some(local_addr) = args.local_addr {
+        let local_addr = match ss_rs::net::io::lookup_host(&local_addr).await {
+            Ok(addr) => addr,
+            Err(e) => {
+                log::error!("Resolve {} failed: {}", local_addr, e);
+                return;
+            }
+        };
+
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {},
             res = ss_local(local_addr, remote_addr, method, key, ctx) => {

@@ -1,5 +1,6 @@
 use std::{
     io::{self, ErrorKind},
+    net::SocketAddr,
     time::Duration,
 };
 
@@ -80,4 +81,14 @@ where
     }
 
     Ok((atob, btoa))
+}
+
+/// Resolves target socket address.
+///
+/// Returns the first resolved socket address.
+pub async fn lookup_host(host: &str) -> io::Result<SocketAddr> {
+    match tokio::net::lookup_host(host).await {
+        Ok(mut iter) => Ok(iter.next().unwrap()),
+        Err(e) => Err(e),
+    }
 }

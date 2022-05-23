@@ -11,7 +11,7 @@ use crate::{
     context::Ctx,
     crypto::cipher::Method,
     net::{
-        io::transfer_between,
+        io::{lookup_host, transfer_between},
         listener::{EncryptedTcpListener, TcpListener},
         stream::{EncryptedTcpStream, TcpStream},
     },
@@ -96,8 +96,8 @@ async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr, ctx:
     };
 
     // Resolves target socket address
-    let target_socket_addr = match tokio::net::lookup_host(target_addr.to_string()).await {
-        Ok(mut iter) => iter.next().unwrap(),
+    let target_socket_addr = match lookup_host(&target_addr.to_string()).await {
+        Ok(addr) => addr,
         Err(e) => {
             log::warn!("Resolve {} failed: {}, peer {}", target_addr, e, peer);
             return;
@@ -168,8 +168,8 @@ async fn handle_ss_local(
     };
 
     // Resolves target socket address
-    let target_socket_addr = match tokio::net::lookup_host(target_addr.to_string()).await {
-        Ok(mut iter) => iter.next().unwrap(),
+    let target_socket_addr = match lookup_host(&target_addr.to_string()).await {
+        Ok(addr) => addr,
         Err(e) => {
             log::warn!("Resolve {} failed: {}, peer {}", target_addr, e, peer);
             return;
@@ -178,7 +178,7 @@ async fn handle_ss_local(
     let target_ip = target_socket_addr.ip();
 
     let trans = format!("{} <=> {} ({})", peer, target_addr, target_ip);
-    match ctx.is_bypass(target_ip, None) {
+    match ctx.is_bypass(target_ip, Some(&target_addr.to_string())) {
         true => {
             log::debug!(
                 "Bypass target address: {} -> {} ({})",

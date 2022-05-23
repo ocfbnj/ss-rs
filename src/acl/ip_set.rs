@@ -150,21 +150,9 @@ mod tests {
     fn test_ip_set() {
         let iplist = [
             "0.0.0.0/8",
-            "10.0.0.0/8",
-            "100.64.0.0/10",
             "127.0.0.0/8",
-            "169.254.0.0/16",
-            "172.16.0.0/12",
-            "192.0.0.0/24",
-            "192.0.2.0/24",
-            "192.88.99.0/24",
             "192.168.0.0/16",
-            "198.18.0.0/15",
-            "198.51.100.0/24",
-            "203.0.113.0/24",
             "220.160.0.0/11",
-            "224.0.0.0/4",
-            "240.0.0.0/4",
             "255.255.255.255/32",
             "::1/128",
             "::ffff:127.0.0.1/104",
@@ -182,33 +170,33 @@ mod tests {
         assert_eq!(set.contains("0.0.0.1".parse().unwrap()), true);
         assert_eq!(set.contains("127.0.0.1".parse().unwrap()), true);
         assert_eq!(set.contains("192.168.0.1".parse().unwrap()), true);
-        assert_eq!(set.contains("255.255.255.255".parse().unwrap()), true);
         assert_eq!(set.contains("220.181.38.148".parse().unwrap()), true);
+        assert_eq!(set.contains("255.255.255.255".parse().unwrap()), true);
 
         assert_eq!(set.contains("::1".parse().unwrap()), true);
+        assert_eq!(set.contains("::ffff:127.0.0.1".parse().unwrap()), true);
         assert_eq!(set.contains("fc00::ffff".parse().unwrap()), true);
         assert_eq!(set.contains("fe80::1234".parse().unwrap()), true);
-        assert_eq!(set.contains("::ffff:127.0.0.1".parse().unwrap()), true);
         assert_eq!(set.contains("2001:b28:f23d:f001::e".parse().unwrap()), true);
 
-        assert_eq!(set.contains("128.0.0.1".parse().unwrap()), false);
         assert_eq!(set.contains("1.1.1.1".parse().unwrap()), false);
-        assert_eq!(set.contains("210.181.38.251".parse().unwrap()), false);
+        assert_eq!(set.contains("128.0.0.1".parse().unwrap()), false);
         assert_eq!(set.contains("8.7.198.46".parse().unwrap()), false);
-        assert_eq!(set.contains("2001:b28:f23d:1::f".parse().unwrap()), false);
+        assert_eq!(set.contains("210.181.38.251".parse().unwrap()), false);
         assert_eq!(set.contains("::ffff:192.0.0.1".parse().unwrap()), false);
+        assert_eq!(set.contains("2001:b28:f23d:1::f".parse().unwrap()), false);
 
         set.clear();
 
         assert_eq!(set.contains("0.0.0.1".parse().unwrap()), false);
         assert_eq!(set.contains("127.0.0.1".parse().unwrap()), false);
         assert_eq!(set.contains("192.168.0.1".parse().unwrap()), false);
-        assert_eq!(set.contains("255.255.255.255".parse().unwrap()), false);
         assert_eq!(set.contains("220.181.38.148".parse().unwrap()), false);
+        assert_eq!(set.contains("255.255.255.255".parse().unwrap()), false);
 
         assert_eq!(set.contains("::1".parse().unwrap()), false);
+        assert_eq!(set.contains("::ffff:127.0.0.1".parse().unwrap()), false);
         assert_eq!(set.contains("fc00::ffff".parse().unwrap()), false);
         assert_eq!(set.contains("fe80::1234".parse().unwrap()), false);
-        assert_eq!(set.contains("::ffff:127.0.0.1".parse().unwrap()), false);
     }
 }

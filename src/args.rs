@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::path::PathBuf;
 
 use clap::Parser;
 
@@ -8,13 +8,13 @@ use ss_rs::crypto::cipher::Method;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
-    /// Socket address of your remote server
+    /// IP address and port of your remote server
     #[clap(short = 's', long)]
-    pub remote_addr: SocketAddr,
+    pub remote_addr: String,
 
-    /// Socket address of your local server (ss-local only)
+    /// IP address and port of your local server (ss-local only)
     #[clap(short = 'l', long)]
-    pub local_addr: Option<SocketAddr>,
+    pub local_addr: Option<String>,
 
     /// Password of your shadowsocks
     #[clap(short = 'k', long)]

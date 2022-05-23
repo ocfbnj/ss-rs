@@ -1,6 +1,5 @@
 use std::{
     fmt::{self, Display, Formatter},
-    io::{self, ErrorKind},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     str::FromStr,
 };
@@ -89,12 +88,6 @@ impl Display for Error {
             Error::NotAddr(addr) => write!(f, "{} is not a valid ip address", addr),
             Error::NotMask(mask) => write!(f, "{} is not a valid subnet mask", mask),
         }
-    }
-}
-
-impl From<Error> for io::Error {
-    fn from(e: Error) -> Self {
-        io::Error::new(ErrorKind::Other, e)
     }
 }
 
