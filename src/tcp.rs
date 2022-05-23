@@ -169,32 +169,33 @@ async fn handle_ss_local(
 
     // Resolves target socket address
     let target_socket_addr = match lookup_host(&target_addr.to_string()).await {
-        Ok(addr) => addr,
+        Ok(addr) => Some(addr),
         Err(e) => {
-            log::warn!("Resolve {} failed: {}, peer {}", target_addr, e, peer);
-            return;
+            log::debug!("Resolve {} failed: {}, peer {}", target_addr, e, peer);
+            None
         }
     };
-    let target_ip = target_socket_addr.ip();
 
-    let trans = format!("{} <=> {} ({})", peer, target_addr, target_ip);
-    match ctx.is_bypass(target_ip, Some(&target_addr.to_string())) {
-        true => {
+    let trans: String;
+    match target_socket_addr {
+        Some(addr) if ctx.is_bypass(addr.ip(), Some(&target_addr.to_string())) => {
+            trans = format!("{} <=> {} ({})", peer, target_addr, addr.ip());
+
             log::debug!(
                 "Bypass target address: {} -> {} ({})",
                 peer,
                 target_addr,
-                target_ip
+                addr.ip()
             );
 
             // Connects to target host
-            let target_stream = match TcpStream::connect(target_socket_addr).await {
+            let target_stream = match TcpStream::connect(addr).await {
                 Ok(stream) => stream,
                 Err(e) => {
                     log::error!(
                         "Unable to connect to {} ({}): {}",
                         target_addr,
-                        target_ip,
+                        addr.ip(),
                         e
                     );
                     return;
@@ -204,13 +205,10 @@ async fn handle_ss_local(
             // Establishes connection between peer and target
             transfer(stream, target_stream, &trans).await;
         }
-        false => {
-            log::debug!(
-                "Proxy target address: {} -> {} ({})",
-                peer,
-                target_addr,
-                target_ip
-            );
+        _ => {
+            trans = format!("{} <=> {}", peer, target_addr);
+
+            log::debug!("Proxy target address: {} -> {}", peer, target_addr);
 
             // Connects to ss-remote
             let mut target_stream =
