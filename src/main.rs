@@ -1,8 +1,9 @@
 mod args;
 
-use std::sync::Arc;
+use std::{io::Write, sync::Arc};
 
 use clap::Parser;
+use env_logger::{Builder, Env};
 
 use ss_rs::{
     acl::Acl,
@@ -16,7 +17,7 @@ use args::Args;
 #[tokio::main]
 async fn main() {
     // 1. Initializes logger
-    env_logger::init();
+    init_logger();
 
     // 2. Parses the command line arguments
     let args = Args::parse();
@@ -83,4 +84,23 @@ async fn main() {
             },
         }
     }
+}
+
+fn init_logger() {
+    let env = Env::default().default_filter_or("ss_rs=info");
+
+    Builder::from_env(env)
+        .format(|buf, record| {
+            let timestamp = buf.timestamp_millis();
+            let style = buf.default_level_style(record.level());
+
+            writeln!(
+                buf,
+                "[{} {}] {}",
+                timestamp,
+                style.value(record.level()),
+                record.args()
+            )
+        })
+        .init();
 }

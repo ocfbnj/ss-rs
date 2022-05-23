@@ -14,7 +14,7 @@
 //! Start a server listening on port 5421 using `chacha20-ietf-poly1305` AEAD cipher with password `ocfbnj`.
 //!
 //! ~~~bash
-//! RUST_LOG=info ss-rs -s 0.0.0.0:5421 -k ocfbnj -m chacha20-ietf-poly1305
+//! ss-rs -s 0.0.0.0:5421 -k ocfbnj -m chacha20-ietf-poly1305
 //! ~~~
 //!
 //! ## Client
@@ -24,7 +24,7 @@
 //! The client listens on port 1080 for incoming SOCKS5 connections and uses `chacha20-ietf-poly1305` AEAD cipher with password `ocfbnj`.
 //!
 //! ~~~bash
-//! RUST_LOG=info ss-rs -s ocfbnj.cn:5421 -l localhost:1080 -k ocfbnj -m chacha20-ietf-poly1305
+//! ss-rs -s ocfbnj.cn:5421 -l localhost:1080 -k ocfbnj -m chacha20-ietf-poly1305
 //! ~~~
 //!
 //! # How to build
