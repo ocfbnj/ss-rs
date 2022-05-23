@@ -1,5 +1,5 @@
 /// Stream buffers.
-pub mod buf;
+mod buf;
 
 /// Utility I/O functions.
 pub mod io;

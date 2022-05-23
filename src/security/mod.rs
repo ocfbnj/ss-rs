@@ -1,7 +1,9 @@
 use bloom::{BloomFilter, ASMS};
 use spin::Mutex;
 
-const EXPECTED_NUM_ITEMS: u32 = 1_000_000;
+mod constants {
+    pub const EXPECTED_NUM_ITEMS: u32 = 1_000_000;
+}
 
 struct Bloom {
     filters: [BloomFilter; 2],
@@ -13,8 +15,8 @@ impl Bloom {
     fn new() -> Self {
         Bloom {
             filters: [
-                BloomFilter::with_rate(1e-6, EXPECTED_NUM_ITEMS),
-                BloomFilter::with_rate(1e-6, EXPECTED_NUM_ITEMS),
+                BloomFilter::with_rate(1e-6, constants::EXPECTED_NUM_ITEMS),
+                BloomFilter::with_rate(1e-6, constants::EXPECTED_NUM_ITEMS),
             ],
             current: 0,
             count: 0,
@@ -30,7 +32,7 @@ impl Bloom {
         filter.insert(&element);
 
         self.count += 1;
-        if self.count == EXPECTED_NUM_ITEMS {
+        if self.count == constants::EXPECTED_NUM_ITEMS {
             self.current = (self.current + 1) % 2;
             self.filters[self.current].clear();
         }

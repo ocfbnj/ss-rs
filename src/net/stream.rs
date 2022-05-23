@@ -18,7 +18,7 @@ use crate::{
         cipher::{Cipher, Method},
         hkdf_sha1, Nonce,
     },
-    net::{buf::OwnedReadBuf, io::MAXIMUM_PAYLOAD_SIZE},
+    net::{buf::OwnedReadBuf, io::constants::MAXIMUM_PAYLOAD_SIZE},
 };
 
 pub struct TcpStream {

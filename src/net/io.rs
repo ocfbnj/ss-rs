@@ -6,10 +6,12 @@ use std::{
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-/// The maximum payload size of shadowsocks.
-pub const MAXIMUM_PAYLOAD_SIZE: usize = 0x3FFF;
-// const MAXIMUM_TAG_SIZE: usize = 16;
-// const MAXIMUM_MESSAGE_SIZE: usize = 2 + MAXIMUM_PAYLOAD_SIZE + 2 * MAXIMUM_TAG_SIZE;
+pub(crate) mod constants {
+    /// The maximum payload size of shadowsocks.
+    pub const MAXIMUM_PAYLOAD_SIZE: usize = 0x3FFF;
+    // const MAXIMUM_TAG_SIZE: usize = 16;
+    // const MAXIMUM_MESSAGE_SIZE: usize = 2 + MAXIMUM_PAYLOAD_SIZE + 2 * MAXIMUM_TAG_SIZE;
+}
 
 /// Copies from reader to writer only once.
 ///
@@ -20,7 +22,7 @@ where
     R: AsyncRead + Unpin + ?Sized,
     W: AsyncWrite + Unpin + ?Sized,
 {
-    let mut payload = [0u8; MAXIMUM_PAYLOAD_SIZE];
+    let mut payload = [0u8; constants::MAXIMUM_PAYLOAD_SIZE];
 
     let bytes_copied = reader.read(&mut payload).await?;
     if bytes_copied != 0 {

@@ -1,4 +1,4 @@
-/// The owned read buffer.
+/// The owned read buffer for internal uses.
 pub struct OwnedReadBuf {
     buf: Vec<u8>,
     offset: usize,
