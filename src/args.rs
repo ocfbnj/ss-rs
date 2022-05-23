@@ -6,7 +6,7 @@ use ss_rs::crypto::cipher::Method;
 
 /// Command-line parameter definitions for the ss-rs program.
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
+#[clap(version, about)]
 pub struct Args {
     /// IP address and port of your remote server
     #[clap(short = 's', long)]
@@ -20,10 +20,15 @@ pub struct Args {
     #[clap(short = 'k', long)]
     pub password: String,
 
-    /// Encrypt method:
-    /// aes-128-gcm, aes-256-gcm,
-    /// chacha20-ietf-poly1305
-    #[clap(short = 'm', long, default_value = "chacha20-ietf-poly1305")]
+    /// Encryption method
+    #[clap(
+        short = 'm',
+        long,
+        default_value = "chacha20-ietf-poly1305",
+        possible_value = "chacha20-ietf-poly1305",
+        possible_value = "aes-128-gcm",
+        possible_value = "aes-256-gcm"
+    )]
     pub method: Method,
 
     /// Access control list
