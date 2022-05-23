@@ -15,8 +15,10 @@ use args::Args;
 
 #[tokio::main]
 async fn main() {
+    // 1. Initializes logger
     env_logger::init();
 
+    // 2. Parses the command line arguments
     let args = Args::parse();
     let method = args.method;
     let password = args.password;
@@ -29,6 +31,22 @@ async fn main() {
         }
     };
 
+    let mut local_addr = None;
+    if let Some(addr) = args.local_addr {
+        match ss_rs::net::io::lookup_host(&addr).await {
+            Ok(addr) => local_addr = Some(addr),
+            Err(e) => {
+                log::error!("Resolve {} failed: {}", addr, e);
+                return;
+            }
+        };
+    }
+
+    // 3. Derives a key from the given password
+    let mut key = vec![0u8; method.key_size()];
+    derive_key(password.as_bytes(), &mut key);
+
+    // 4. Prepares shadowsocks context
     let mut ctx = Ctx::new();
     if let Some(path) = args.acl_path {
         let acl = match Acl::from_file(&path) {
@@ -41,21 +59,10 @@ async fn main() {
 
         ctx.set_acl(acl);
     }
-
-    let mut key = vec![0u8; method.key_size()];
-    derive_key(password.as_bytes(), &mut key);
-
     let ctx = Arc::new(ctx);
 
-    if let Some(local_addr) = args.local_addr {
-        let local_addr = match ss_rs::net::io::lookup_host(&local_addr).await {
-            Ok(addr) => addr,
-            Err(e) => {
-                log::error!("Resolve {} failed: {}", local_addr, e);
-                return;
-            }
-        };
-
+    // 5. Starts shadowsocks server
+    if let Some(local_addr) = local_addr {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {},
             res = ss_local(local_addr, remote_addr, method, key, ctx) => {

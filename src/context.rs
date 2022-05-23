@@ -3,6 +3,8 @@ use std::net::IpAddr;
 use crate::{acl::Acl, security::ReplayProtection};
 
 /// Context for the shadowsocks communication.
+///
+/// It provides replay protection and access control list.
 pub struct Ctx {
     replay_protection: ReplayProtection,
     acl: Option<Acl>,
