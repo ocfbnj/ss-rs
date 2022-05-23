@@ -72,13 +72,13 @@ pub async fn ss_local(
 }
 
 async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr, ctx: Arc<Ctx>) {
-    // Checks whether or not to reject the client
+    // 1. Checks whether or not to reject the client
     if ctx.is_bypass(peer.ip(), None) {
         log::warn!("Reject the client: peer {}", peer);
         return;
     }
 
-    // Constructs a socks5 address with timeout
+    // 2. Constructs a socks5 address with timeout
     let result = tokio::time::timeout(Duration::from_secs(15), Socks5Addr::construct(&mut stream));
     let target_addr = match result.await {
         Ok(Ok(addr)) => addr,
@@ -95,7 +95,7 @@ async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr, ctx:
         }
     };
 
-    // Resolves target socket address
+    // 3. Resolves target socket address
     let target_socket_addr = match lookup_host(&target_addr.to_string()).await {
         Ok(addr) => addr,
         Err(e) => {
@@ -105,7 +105,7 @@ async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr, ctx:
     };
     let target_ip = target_socket_addr.ip();
 
-    // Checks whether or not to block outbound
+    // 4. Checks whether or not to block outbound
     if ctx.is_block_outbound(target_ip, Some(&target_addr.to_string())) {
         log::warn!(
             "Block outbound address: {} -> {} ({})",
@@ -123,7 +123,7 @@ async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr, ctx:
         target_ip
     );
 
-    // Connects to target address
+    // 5. Connects to target address
     let target_stream = match TcpStream::connect(target_socket_addr).await {
         Ok(stream) => stream,
         Err(e) => {
@@ -137,7 +137,7 @@ async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr, ctx:
         }
     };
 
-    // Establishes connection between peer and target
+    // 6. Establishes connection between ss-local and target
     let trans = format!("{} <=> {} ({})", peer, target_addr, target_ip);
     transfer(stream, target_stream, &trans).await;
 }
@@ -150,7 +150,7 @@ async fn handle_ss_local(
     key: Vec<u8>,
     ctx: Arc<Ctx>,
 ) {
-    // Constructs a SOCKS address with timeout
+    // 1. Constructs a socks5 address with timeout
     let result = tokio::time::timeout(Duration::from_secs(15), socks::handshake(&mut stream));
     let target_addr: Socks5Addr = match result.await {
         Ok(Ok(addr)) => addr.into(),
@@ -167,7 +167,7 @@ async fn handle_ss_local(
         }
     };
 
-    // Resolves target socket address
+    // 2. Resolves target socket address
     let target_socket_addr = match lookup_host(&target_addr.to_string()).await {
         Ok(addr) => Some(addr),
         Err(e) => {
@@ -176,6 +176,7 @@ async fn handle_ss_local(
         }
     };
 
+    // 3. Relays target address, bypass or proxy
     let trans: String;
     match target_socket_addr {
         Some(addr) if ctx.is_bypass(addr.ip(), Some(&target_addr.to_string())) => {
@@ -188,7 +189,7 @@ async fn handle_ss_local(
                 addr.ip()
             );
 
-            // Connects to target host
+            // 3.1 Connects to target host
             let target_stream = match TcpStream::connect(addr).await {
                 Ok(stream) => stream,
                 Err(e) => {
@@ -202,7 +203,7 @@ async fn handle_ss_local(
                 }
             };
 
-            // Establishes connection between peer and target
+            // 3.2 Establishes connection between ss-local and target
             transfer(stream, target_stream, &trans).await;
         }
         _ => {
@@ -210,7 +211,7 @@ async fn handle_ss_local(
 
             log::debug!("Proxy target address: {} -> {}", peer, target_addr);
 
-            // Connects to ss-remote
+            // 3.1 Connects to ss-remote
             let mut target_stream =
                 match EncryptedTcpStream::connect(remote_addr, method, &key, ctx).await {
                     Ok(stream) => stream,
@@ -220,7 +221,7 @@ async fn handle_ss_local(
                     }
                 };
 
-            // Writes target address
+            // 3.2 Writes target address
             let target_addr_bytes = target_addr.get_raw_parts();
             match target_stream.write_all(&target_addr_bytes).await {
                 Ok(_) => {}
@@ -230,7 +231,7 @@ async fn handle_ss_local(
                 }
             }
 
-            // Establishes connection between peer and target
+            // 3.3 Establishes connection between ss-local and ss-remote
             transfer(stream, target_stream, &trans).await;
         }
     }
