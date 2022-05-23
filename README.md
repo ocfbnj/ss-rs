@@ -1,5 +1,8 @@
 # ss-rs
 
+[![Cargo Build & Test](https://github.com/ocfbnj/ss-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/ocfbnj/ss-rs/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/ss-rs)](https://crates.io/crates/ss-rs)
+
 An unofficial shadowsocks implementation that can work with official shadowsocks.
 
 ## Features
