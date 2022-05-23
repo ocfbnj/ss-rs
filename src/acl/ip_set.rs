@@ -1,9 +1,13 @@
 use std::net::IpAddr;
 
-use crate::{
-    acl::cidr::Cidr,
-    bits::{Bits, Msb0},
+use bitvec::{
+    order::{BitOrder, Msb0},
+    slice::BitSlice,
+    store::BitStore,
+    view::BitView,
 };
+
+use crate::acl::cidr::Cidr;
 
 struct Trie {
     root: TrieNode,
@@ -16,15 +20,15 @@ impl Trie {
         }
     }
 
-    // pub fn insert(&mut self, data: &[u8]) {
-    //     self.insert_bits(Bits::from(data));
-    // }
-
-    pub fn insert_bits(&mut self, bits: Bits<Msb0>) {
+    pub fn insert_bits<T, O>(&mut self, bits: &BitSlice<T, O>)
+    where
+        T: BitStore,
+        O: BitOrder,
+    {
         let mut cur = &mut self.root;
 
         for bit in bits.iter() {
-            match bit {
+            match *bit {
                 true => {
                     if cur.right.is_none() {
                         cur.right = Some(Box::new(TrieNode::new()));
@@ -47,10 +51,10 @@ impl Trie {
 
     pub fn contains(&self, data: &[u8]) -> bool {
         let mut cur = &self.root;
-        let bits = Bits::<Msb0>::from(data);
+        let bits = data.view_bits::<Msb0>();
 
         for bit in bits.iter() {
-            match bit {
+            match *bit {
                 true => {
                     if cur.right.is_none() {
                         return false;
@@ -120,10 +124,10 @@ impl IpSet {
         match cidr.addr {
             IpAddr::V4(v4) => self
                 .ipv4
-                .insert_bits(Bits::with_max_len(&v4.octets(), mask)),
+                .insert_bits(&v4.octets().view_bits::<Msb0>()[..mask]),
             IpAddr::V6(v6) => self
                 .ipv6
-                .insert_bits(Bits::with_max_len(&v6.octets(), mask)),
+                .insert_bits(&v6.octets().view_bits::<Msb0>()[..mask]),
         }
     }
 

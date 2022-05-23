@@ -53,9 +53,6 @@
 /// Access control list.
 pub mod acl;
 
-/// Bit array manipulation.
-pub mod bits;
-
 /// Shadowsocks context.
 pub mod context;
 
