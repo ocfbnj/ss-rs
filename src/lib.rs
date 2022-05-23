@@ -49,7 +49,6 @@
 //!     ~~~
 //!
 //!     Now you can find the binary in `./target/release/ss-rs`.
-//!
 
 /// Access control list.
 pub mod acl;
