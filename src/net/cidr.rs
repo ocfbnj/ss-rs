@@ -1,3 +1,5 @@
+//! CIDR parser.
+
 use std::{
     fmt::{self, Display, Formatter},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},

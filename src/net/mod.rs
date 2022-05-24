@@ -1,8 +1,7 @@
-/// Stream buffers.
-mod buf;
+//! Networking facilities for shadowsocks communication.
 
-/// Utility I/O functions.
+pub mod cidr;
 pub mod io;
-
-/// Shadowsocks streams.
 pub mod stream;
+
+mod buf;

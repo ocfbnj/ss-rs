@@ -1,3 +1,5 @@
+//! Shadowsocks streams.
+
 use std::{
     fmt::{self, Display, Formatter},
     io,

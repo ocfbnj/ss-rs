@@ -1,3 +1,5 @@
+//! Shadowsocks context.
+
 use std::net::IpAddr;
 
 use crate::{acl::Acl, security::ReplayProtection};

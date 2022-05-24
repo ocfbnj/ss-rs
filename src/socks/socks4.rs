@@ -1,3 +1,5 @@
+//! SOCKS4a protocol implementation.
+
 use std::{
     fmt::{self, Display, Formatter},
     io,

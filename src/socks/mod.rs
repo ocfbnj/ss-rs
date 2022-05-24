@@ -1,7 +1,6 @@
-/// SOCKS4a protocol implementation.
-pub mod socks4;
+//! SOCKS protocol implementation.
 
-/// SOCKS5 protocol implementation.
+pub mod socks4;
 pub mod socks5;
 
 use std::{

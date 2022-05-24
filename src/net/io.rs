@@ -1,3 +1,5 @@
+//! Utility I/O functions.
+
 use std::{
     io::{self, ErrorKind},
     net::SocketAddr,

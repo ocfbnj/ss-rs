@@ -50,23 +50,10 @@
 //!
 //!     Now you can find the binary in `./target/release/ss-rs`.
 
-/// Access control list.
 pub mod acl;
-
-/// Shadowsocks context.
 pub mod context;
-
-/// Encryption and decryption.
 pub mod crypto;
-
-/// Networking facilities for shadowsocks communication.
 pub mod net;
-
-/// Networking security facilities for shadowsocks communication.
 pub mod security;
-
-/// SOCKS protocol implementation.
 pub mod socks;
-
-/// Shadowsocks tcp services.
 pub mod tcp;

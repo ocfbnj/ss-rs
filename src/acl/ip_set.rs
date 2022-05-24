@@ -1,3 +1,5 @@
+//! A set of ip networks.
+
 use std::net::IpAddr;
 
 use bitvec::{
@@ -7,7 +9,7 @@ use bitvec::{
     view::BitView,
 };
 
-use crate::acl::cidr::Cidr;
+use crate::net::cidr::Cidr;
 
 struct Trie {
     root: TrieNode,

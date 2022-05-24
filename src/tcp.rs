@@ -1,3 +1,5 @@
+//! Shadowsocks tcp services.
+
 use std::{
     io::{self, ErrorKind},
     net::SocketAddr,

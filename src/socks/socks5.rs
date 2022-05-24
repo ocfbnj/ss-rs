@@ -1,3 +1,5 @@
+//! SOCKS5 protocol implementation.
+
 use std::{
     fmt::{self, Display, Formatter},
     io,

@@ -1,7 +1,6 @@
-/// Authenticated Encryption with Associated Data (AEAD) algorithms.
-pub mod aead;
+//! Encryption and decryption.
 
-/// Shadowsocks ciphers.
+pub mod aead;
 pub mod cipher;
 
 use std::ops::Deref;

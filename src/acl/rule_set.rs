@@ -1,3 +1,5 @@
+//! A set of rules.
+
 use regex::Regex;
 
 /// A set of rules.

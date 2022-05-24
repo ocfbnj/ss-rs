@@ -1,17 +1,16 @@
-/// A set of ip networks.
+//! Access control list.
+
 pub mod ip_set;
-
-/// CIDR parser.
-pub mod cidr;
-
-/// A set of rules.
 pub mod rule_set;
 
 use std::{io, net::IpAddr, path::Path};
 
 use regex::Regex;
 
-use crate::acl::{cidr::Cidr, ip_set::IpSet, rule_set::RuleSet};
+use crate::{
+    acl::{ip_set::IpSet, rule_set::RuleSet},
+    net::cidr::Cidr,
+};
 
 /// Access control list.
 pub struct Acl {

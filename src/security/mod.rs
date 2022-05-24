@@ -1,3 +1,5 @@
+//! Networking security facilities for shadowsocks communication.
+
 use bloom::{BloomFilter, ASMS};
 use spin::Mutex;
 

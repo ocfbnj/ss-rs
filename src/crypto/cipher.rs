@@ -1,3 +1,5 @@
+//! Shadowsocks ciphers.
+
 use std::{
     fmt::{self, Display, Formatter},
     str::FromStr,
