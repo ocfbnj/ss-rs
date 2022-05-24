@@ -59,10 +59,10 @@ pub mod context;
 /// Encryption and decryption.
 pub mod crypto;
 
-/// Networking primitives for shadowsocks communication.
+/// Networking facilities for shadowsocks communication.
 pub mod net;
 
-/// Networking security primitives for shadowsocks communication.
+/// Networking security facilities for shadowsocks communication.
 pub mod security;
 
 /// SOCKS protocol implementation.
