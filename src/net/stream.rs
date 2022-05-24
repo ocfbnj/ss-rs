@@ -18,6 +18,8 @@ use crate::{
     net::{buf::OwnedReadBuf, io::constants::MAXIMUM_PAYLOAD_SIZE},
 };
 
+use crate::net::io::poll_read_exact;
+
 /// A shadowsocks tcp stream.
 pub struct TcpStream<T> {
     inner_stream: T,
@@ -60,7 +62,7 @@ impl<T> TcpStream<T> {
             write_state: WriteState::WriteSalt,
             in_payload: Vec::new(),
             out_payload: Vec::new(),
-            read_buf: OwnedReadBuf::zero(),
+            read_buf: OwnedReadBuf::new(),
             ctx: ctx.clone(),
         }
     }
@@ -161,7 +163,12 @@ where
     fn poll_read_salt(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         if self.dec_cipher.is_none() {
             let mut salt = vec![0u8; self.cipher_method.salt_size()];
-            ready!(self.poll_read_exact(cx, &mut salt))?;
+            ready!(poll_read_exact(
+                &mut self.inner_stream,
+                &mut self.read_buf,
+                cx,
+                &mut salt
+            ))?;
 
             self.incoming_salt = Some(salt.clone());
 
@@ -177,7 +184,12 @@ where
 
     fn poll_read_length(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<usize>> {
         let mut buf = vec![0u8; 2 + self.cipher_method.tag_size()];
-        ready!(self.poll_read_exact(cx, &mut buf))?;
+        ready!(poll_read_exact(
+            &mut self.inner_stream,
+            &mut self.read_buf,
+            cx,
+            &mut buf
+        ))?;
 
         let len = self.decrypt(&buf)?;
         let len = [len[0], len[1]];
@@ -198,38 +210,15 @@ where
         payload_len: usize,
     ) -> Poll<io::Result<Vec<u8>>> {
         let mut buf = vec![0u8; payload_len + self.cipher_method.tag_size()];
-        ready!(self.poll_read_exact(cx, &mut buf))?;
+        ready!(poll_read_exact(
+            &mut self.inner_stream,
+            &mut self.read_buf,
+            cx,
+            &mut buf
+        ))?;
         let payload = self.decrypt(&buf)?;
 
         Ok(payload).into()
-    }
-
-    fn poll_read_exact(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<()>> {
-        if self.read_buf.is_full() {
-            self.read_buf = OwnedReadBuf::new(buf.len());
-        }
-
-        while !self.read_buf.is_full() {
-            let mut read_buf = ReadBuf::new(self.read_buf.get_unfilled());
-            let remaining = read_buf.remaining();
-
-            ready!(Pin::new(&mut self.inner_stream).poll_read(cx, &mut read_buf))?;
-
-            let nread = remaining - read_buf.remaining();
-            if nread == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "the source get eof",
-                ))
-                .into();
-            }
-
-            self.read_buf.advance(nread);
-        }
-
-        buf.copy_from_slice(self.read_buf.get_filled());
-
-        Ok(()).into()
     }
 }
 

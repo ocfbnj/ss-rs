@@ -1,10 +1,15 @@
 use std::{
     io::{self, ErrorKind},
     net::SocketAddr,
+    pin::Pin,
+    task::{Context, Poll},
     time::Duration,
 };
 
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use futures_core::ready;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
+
+use crate::net::buf::OwnedReadBuf;
 
 pub(crate) mod constants {
     /// The maximum payload size of shadowsocks.
@@ -93,4 +98,44 @@ pub async fn lookup_host(host: &str) -> io::Result<SocketAddr> {
         Ok(mut iter) => Ok(iter.next().unwrap()),
         Err(e) => Err(e),
     }
+}
+
+pub(crate) fn poll_read_exact<R>(
+    reader: &mut R,
+    owned_read_buf: &mut OwnedReadBuf,
+    cx: &mut Context<'_>,
+    buf: &mut [u8],
+) -> Poll<io::Result<()>>
+where
+    R: AsyncRead + Unpin + ?Sized,
+{
+    if owned_read_buf.is_full() {
+        // The last call to `poll_read_exact()` has returned `Ready`,
+        // Now there is a brand new call to `poll_read_exact()`.
+        owned_read_buf.require(buf.len());
+    }
+
+    assert_eq!(owned_read_buf.capacity(), buf.len());
+
+    while !owned_read_buf.is_full() {
+        let mut read_buf = ReadBuf::new(owned_read_buf.uninitialized_mut());
+        let remaining = read_buf.remaining();
+
+        ready!(Pin::new(&mut *reader).poll_read(cx, &mut read_buf))?;
+
+        let nread = remaining - read_buf.remaining();
+        if nread == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "the source get eof",
+            ))
+            .into();
+        }
+
+        owned_read_buf.add_filled(nread);
+    }
+
+    buf.copy_from_slice(owned_read_buf.filled());
+
+    Ok(()).into()
 }
