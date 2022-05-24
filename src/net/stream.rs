@@ -7,10 +7,7 @@ use std::{
 };
 
 use futures_core::ready;
-use tokio::{
-    io::{AsyncRead, AsyncWrite, ReadBuf},
-    net::{TcpStream as TokioTcpStream, ToSocketAddrs},
-};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use crate::{
     context::Ctx,
@@ -21,56 +18,9 @@ use crate::{
     net::{buf::OwnedReadBuf, io::constants::MAXIMUM_PAYLOAD_SIZE},
 };
 
-pub struct TcpStream {
-    inner_stream: TokioTcpStream,
-}
-
-impl TcpStream {
-    pub fn new(inner_stream: TokioTcpStream) -> Self {
-        TcpStream { inner_stream }
-    }
-
-    pub async fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
-        Ok(TcpStream {
-            inner_stream: TokioTcpStream::connect(addr).await?,
-        })
-    }
-}
-
-impl AsyncRead for TcpStream {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        let inner_stream = &mut self.get_mut().inner_stream;
-        Pin::new(inner_stream).poll_read(cx, buf)
-    }
-}
-
-impl AsyncWrite for TcpStream {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize, io::Error>> {
-        let inner_stream = &mut self.get_mut().inner_stream;
-        Pin::new(inner_stream).poll_write(cx, buf)
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        let inner_stream = &mut self.get_mut().inner_stream;
-        Pin::new(inner_stream).poll_flush(cx)
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        let inner_stream = &mut self.get_mut().inner_stream;
-        Pin::new(inner_stream).poll_shutdown(cx)
-    }
-}
-
-pub struct EncryptedTcpStream {
-    inner_stream: TokioTcpStream,
+/// A shadowsocks tcp stream.
+pub struct TcpStream<T> {
+    inner_stream: T,
 
     cipher_method: Method,
     cipher_key: Vec<u8>,
@@ -94,14 +44,10 @@ pub struct EncryptedTcpStream {
     ctx: Arc<Ctx>,
 }
 
-impl EncryptedTcpStream {
-    pub fn new(
-        inner_stream: TokioTcpStream,
-        cipher_method: Method,
-        cipher_key: &[u8],
-        ctx: Arc<Ctx>,
-    ) -> Self {
-        EncryptedTcpStream {
+impl<T> TcpStream<T> {
+    /// Creates a new shadowsocks tcp stream from a stream.
+    pub fn new(inner_stream: T, cipher_method: Method, cipher_key: &[u8], ctx: Arc<Ctx>) -> Self {
+        TcpStream {
             inner_stream,
             cipher_method,
             cipher_key: cipher_key.to_owned(),
@@ -118,25 +64,44 @@ impl EncryptedTcpStream {
             ctx: ctx.clone(),
         }
     }
+}
 
-    pub async fn connect<A: ToSocketAddrs>(
-        addr: A,
-        cipher_method: Method,
-        cipher_key: &[u8],
-        ctx: Arc<Ctx>,
-    ) -> io::Result<Self> {
-        let inner_stream = TokioTcpStream::connect(addr).await?;
+impl<T> TcpStream<T> {
+    fn encrypt(&mut self, plaintext: &[u8]) -> io::Result<Vec<u8>> {
+        match self
+            .enc_cipher
+            .as_ref()
+            .expect("no salt received")
+            .encrypt(&self.enc_nonce, plaintext)
+        {
+            Ok(data) => {
+                self.enc_nonce.increment();
+                Ok(data)
+            }
+            Err(_) => Err(io::Error::new(io::ErrorKind::Other, Error::Encryption)),
+        }
+    }
 
-        Ok(EncryptedTcpStream::new(
-            inner_stream,
-            cipher_method,
-            cipher_key,
-            ctx,
-        ))
+    fn decrypt(&mut self, ciphertext: &[u8]) -> io::Result<Vec<u8>> {
+        match self
+            .dec_cipher
+            .as_ref()
+            .expect("no salt received")
+            .decrypt(&self.dec_nonce, ciphertext)
+        {
+            Ok(data) => {
+                self.dec_nonce.increment();
+                Ok(data)
+            }
+            Err(_) => Err(io::Error::new(io::ErrorKind::Other, Error::Decryption)),
+        }
     }
 }
 
-impl EncryptedTcpStream {
+impl<T> TcpStream<T>
+where
+    T: AsyncRead + Unpin,
+{
     fn poll_read_decrypt_helper(
         &mut self,
         cx: &mut Context<'_>,
@@ -268,17 +233,10 @@ impl EncryptedTcpStream {
     }
 }
 
-impl AsyncRead for EncryptedTcpStream {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        self.get_mut().poll_read_decrypt_helper(cx, buf)
-    }
-}
-
-impl EncryptedTcpStream {
+impl<T> TcpStream<T>
+where
+    T: AsyncWrite + Unpin,
+{
     fn poll_write_encrypt(
         &mut self,
         cx: &mut Context<'_>,
@@ -364,7 +322,23 @@ impl EncryptedTcpStream {
     }
 }
 
-impl AsyncWrite for EncryptedTcpStream {
+impl<T> AsyncRead for TcpStream<T>
+where
+    T: AsyncRead + Unpin,
+{
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        self.get_mut().poll_read_decrypt_helper(cx, buf)
+    }
+}
+
+impl<T> AsyncWrite for TcpStream<T>
+where
+    T: AsyncWrite + Unpin,
+{
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -381,38 +355,6 @@ impl AsyncWrite for EncryptedTcpStream {
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         let inner_stream = &mut self.get_mut().inner_stream;
         Pin::new(inner_stream).poll_shutdown(cx)
-    }
-}
-
-impl EncryptedTcpStream {
-    fn encrypt(&mut self, plaintext: &[u8]) -> io::Result<Vec<u8>> {
-        match self
-            .enc_cipher
-            .as_ref()
-            .expect("no salt received")
-            .encrypt(&self.enc_nonce, plaintext)
-        {
-            Ok(data) => {
-                self.enc_nonce.increment();
-                Ok(data)
-            }
-            Err(_) => Err(io::Error::new(io::ErrorKind::Other, Error::Encryption)),
-        }
-    }
-
-    fn decrypt(&mut self, ciphertext: &[u8]) -> io::Result<Vec<u8>> {
-        match self
-            .dec_cipher
-            .as_ref()
-            .expect("no salt received")
-            .decrypt(&self.dec_nonce, ciphertext)
-        {
-            Ok(data) => {
-                self.dec_nonce.increment();
-                Ok(data)
-            }
-            Err(_) => Err(io::Error::new(io::ErrorKind::Other, Error::Decryption)),
-        }
     }
 }
 

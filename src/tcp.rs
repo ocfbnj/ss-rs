@@ -5,18 +5,61 @@ use std::{
     time::Duration,
 };
 
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::{
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    net::{TcpListener as TokioTcpListener, TcpStream as TokioTcpStream, ToSocketAddrs},
+};
 
 use crate::{
     context::Ctx,
     crypto::cipher::Method,
     net::{
         io::{lookup_host, transfer_between},
-        listener::{EncryptedTcpListener, TcpListener},
-        stream::{EncryptedTcpStream, TcpStream},
+        stream::TcpStream as SsTcpStream,
     },
     socks::{self, socks5::Socks5Addr},
 };
+
+/// TCP Listener for incoming shadowsocks connection.
+pub struct SsTcpListener {
+    inner_listener: TokioTcpListener,
+    cipher_method: Method,
+    cipher_key: Vec<u8>,
+    ctx: Arc<Ctx>,
+}
+
+impl SsTcpListener {
+    /// Creates a new TcpListener for incoming shadowsocks connection,
+    /// which will be bound to the specified address.
+    pub async fn bind<A: ToSocketAddrs>(
+        addr: A,
+        cipher_method: Method,
+        cipher_key: &[u8],
+        ctx: Arc<Ctx>,
+    ) -> io::Result<Self> {
+        let inner_listener = TokioTcpListener::bind(addr).await?;
+        Ok(SsTcpListener {
+            inner_listener,
+            cipher_method,
+            cipher_key: cipher_key.to_owned(),
+            ctx,
+        })
+    }
+
+    /// Accepts a new incoming shadowsocks connection from this listener.
+    pub async fn accept(&self) -> io::Result<(SsTcpStream<TokioTcpStream>, SocketAddr)> {
+        let (stream, addr) = self.inner_listener.accept().await?;
+        Ok((
+            SsTcpStream::new(
+                stream,
+                self.cipher_method,
+                &self.cipher_key,
+                self.ctx.clone(),
+            ),
+            addr,
+        ))
+    }
+}
 
 /// Starts a shadowsocks remote server.
 pub async fn ss_remote(
@@ -25,7 +68,7 @@ pub async fn ss_remote(
     key: Vec<u8>,
     ctx: Arc<Ctx>,
 ) -> io::Result<()> {
-    let listener = EncryptedTcpListener::bind(addr, method, &key, ctx.clone()).await?;
+    let listener = SsTcpListener::bind(addr, method, &key, ctx.clone()).await?;
 
     log::info!("ss-remote listening on {}", addr);
 
@@ -48,7 +91,7 @@ pub async fn ss_local(
     key: Vec<u8>,
     ctx: Arc<Ctx>,
 ) -> io::Result<()> {
-    let listener = TcpListener::bind(local_addr).await?;
+    let listener = TokioTcpListener::bind(local_addr).await?;
 
     log::info!("ss-local listening on {}", local_addr);
     log::info!("The remote server address is {}", remote_addr);
@@ -71,7 +114,11 @@ pub async fn ss_local(
     }
 }
 
-async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr, ctx: Arc<Ctx>) {
+/// Handles incoming connection from ss-remote.
+pub async fn handle_ss_remote<T>(mut stream: SsTcpStream<T>, peer: SocketAddr, ctx: Arc<Ctx>)
+where
+    T: AsyncRead + AsyncWrite + Unpin + Send,
+{
     // 1. Checks whether or not to reject the client
     if ctx.is_bypass(peer.ip(), None) {
         log::warn!("Reject the client: peer {}", peer);
@@ -124,7 +171,7 @@ async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr, ctx:
     );
 
     // 5. Connects to target address
-    let target_stream = match TcpStream::connect(target_socket_addr).await {
+    let target_stream = match TokioTcpStream::connect(target_socket_addr).await {
         Ok(stream) => stream,
         Err(e) => {
             log::debug!(
@@ -142,8 +189,9 @@ async fn handle_ss_remote(mut stream: EncryptedTcpStream, peer: SocketAddr, ctx:
     transfer(stream, target_stream, &trans).await;
 }
 
-async fn handle_ss_local(
-    mut stream: TcpStream,
+/// Handles incoming connection from ss-local.
+pub async fn handle_ss_local(
+    mut stream: TokioTcpStream,
     peer: SocketAddr,
     remote_addr: SocketAddr,
     method: Method,
@@ -190,7 +238,7 @@ async fn handle_ss_local(
             );
 
             // 3.1 Connects to target host
-            let target_stream = match TcpStream::connect(addr).await {
+            let target_stream = match TokioTcpStream::connect(addr).await {
                 Ok(stream) => stream,
                 Err(e) => {
                     log::error!(
@@ -212,14 +260,13 @@ async fn handle_ss_local(
             log::debug!("Proxy target address: {} -> {}", peer, target_addr);
 
             // 3.1 Connects to ss-remote
-            let mut target_stream =
-                match EncryptedTcpStream::connect(remote_addr, method, &key, ctx).await {
-                    Ok(stream) => stream,
-                    Err(e) => {
-                        log::error!("Unable to connect to {}: {}", remote_addr, e);
-                        return;
-                    }
-                };
+            let mut target_stream = match TokioTcpStream::connect(remote_addr).await {
+                Ok(stream) => SsTcpStream::new(stream, method, &key, ctx),
+                Err(e) => {
+                    log::error!("Unable to connect to {}: {}", remote_addr, e);
+                    return;
+                }
+            };
 
             // 3.2 Writes target address
             let target_addr_bytes = target_addr.get_raw_parts();
