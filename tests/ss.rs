@@ -18,7 +18,7 @@ const LOCAL_ADDR: &str = "127.0.0.1:10801";
 const METHOD: Method = Method::ChaCha20Poly1305;
 const KEY: &str = "123456";
 
-const REQ: &[u8] = b"\x05\x02\x00\x01\x05\x01\x00\x03\x09baidu.com\x00\x50GET / HTTP/1.0\r\n\r\n";
+const REQ: &[u8] = b"\x05\x02\x00\x01\x05\x01\x00\x03\x0bexample.com\x00\x50GET / HTTP/1.0\r\n\r\n";
 
 #[tokio::test]
 async fn test() {
