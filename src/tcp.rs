@@ -177,10 +177,11 @@ where
         Ok(stream) => stream,
         Err(e) => {
             log::debug!(
-                "Unable to connect to {} ({}): {}",
+                "Unable to connect to {} ({}): {}, peer {}",
                 target_addr,
                 target_ip,
-                e
+                e,
+                peer
             );
             return;
         }
@@ -244,10 +245,11 @@ pub async fn handle_ss_local(
                 Ok(stream) => stream,
                 Err(e) => {
                     log::error!(
-                        "Unable to connect to {} ({}): {}",
+                        "Unable to connect to {} ({}): {}, peer {}",
                         target_addr,
                         addr.ip(),
-                        e
+                        e,
+                        peer
                     );
                     return;
                 }
@@ -265,7 +267,7 @@ pub async fn handle_ss_local(
             let mut target_stream = match TokioTcpStream::connect(remote_addr).await {
                 Ok(stream) => SsTcpStream::new(stream, method, &key, ctx),
                 Err(e) => {
-                    log::error!("Unable to connect to {}: {}", remote_addr, e);
+                    log::error!("Unable to connect to {}: {}, peer {}", remote_addr, e, peer);
                     return;
                 }
             };
@@ -275,7 +277,12 @@ pub async fn handle_ss_local(
             match target_stream.write_all(&target_addr_bytes).await {
                 Ok(_) => {}
                 Err(e) => {
-                    log::error!("Write target address to {} failed: {}", remote_addr, e);
+                    log::error!(
+                        "Write target address to {} failed: {}, peer {}",
+                        remote_addr,
+                        e,
+                        peer
+                    );
                     return;
                 }
             }
