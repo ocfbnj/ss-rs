@@ -56,6 +56,9 @@ where
     let mut atob_done = false;
     let mut btoa_done = false;
 
+    let mut atob_err = None;
+    let mut btoa_err = None;
+
     while !atob_done || !btoa_done {
         tokio::select! {
             _ = tokio::time::sleep(timeout) => {
@@ -73,7 +76,11 @@ where
                         wb.shutdown().await.unwrap_or_default();
                     }
                     Ok(n) => atob += n,
-                    Err(e) => return Err(e),
+                    Err(e) => {
+                        atob_done = true;
+                        atob_err = Some(e);
+                        wb.shutdown().await.unwrap_or_default();
+                    },
                 }
             }
             res = copy_once(&mut rb, &mut wa), if btoa_done == false => {
@@ -83,10 +90,28 @@ where
                         wa.shutdown().await.unwrap_or_default();
                     }
                     Ok(n) => btoa += n,
-                    Err(e) => return Err(e),
+                    Err(e) => {
+                        btoa_done = true;
+                        btoa_err = Some(e);
+                        wa.shutdown().await.unwrap_or_default();
+                    },
                 }
             }
         }
+    }
+
+    if let Some(err) = atob_err {
+        return Err(io::Error::new(
+            err.kind(),
+            format!("ltor {}", err.to_string()),
+        ));
+    }
+
+    if let Some(err) = btoa_err {
+        return Err(io::Error::new(
+            err.kind(),
+            format!("rtol {}", err.to_string()),
+        ));
     }
 
     Ok((atob, btoa))
