@@ -253,10 +253,6 @@ where
                             Pin::new(&mut self.inner_stream).poll_write(cx, &self.out_payload)
                         )?;
 
-                        if nwrite == 0 {
-                            return Err(io::ErrorKind::BrokenPipe.into()).into();
-                        }
-
                         self.out_payload = self.out_payload[nwrite..].to_vec();
                     }
 
