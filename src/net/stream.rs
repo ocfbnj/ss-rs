@@ -114,8 +114,7 @@ where
         let res = ready!(self.poll_read_decrypt(cx, buf));
 
         if let Err(e) = res {
-            if !(e.kind() == io::ErrorKind::UnexpectedEof && e.to_string() == "the source get eof")
-            {
+            if e.kind() != io::ErrorKind::UnexpectedEof {
                 return Err(e).into();
             }
         }

@@ -127,11 +127,7 @@ where
 
         let nread = remaining - read_buf.remaining();
         if nread == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "the source get eof",
-            ))
-            .into();
+            return Err(io::ErrorKind::UnexpectedEof.into()).into();
         }
 
         owned_read_buf.add_filled(nread);
