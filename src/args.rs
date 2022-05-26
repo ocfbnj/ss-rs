@@ -34,4 +34,8 @@ pub struct Args {
     /// Access control list
     #[clap(long = "acl")]
     pub acl_path: Option<PathBuf>,
+
+    /// Debug mode
+    #[clap(short, long)]
+    pub verbose: bool,
 }

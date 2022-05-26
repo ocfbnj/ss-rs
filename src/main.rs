@@ -16,11 +16,11 @@ use args::Args;
 
 #[tokio::main]
 async fn main() {
-    // 1. Initializes logger
-    init_logger();
-
-    // 2. Parses the command line arguments
+    // 1. Parses the command line arguments and initializes logger
     let args = Args::parse();
+
+    init_logger(args.verbose);
+
     let method = args.method;
     let password = args.password;
 
@@ -43,11 +43,11 @@ async fn main() {
         };
     }
 
-    // 3. Derives a key from the given password
+    // 2. Derives a key from the given password
     let mut key = vec![0u8; method.key_size()];
     derive_key(password.as_bytes(), &mut key);
 
-    // 4. Prepares shadowsocks context
+    // 3. Prepares shadowsocks context
     let mut ctx = Ctx::new();
     if let Some(path) = args.acl_path {
         let acl = match Acl::from_file(&path) {
@@ -62,7 +62,7 @@ async fn main() {
     }
     let ctx = Arc::new(ctx);
 
-    // 5. Starts shadowsocks server
+    // 4. Starts shadowsocks server
     if let Some(local_addr) = local_addr {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {},
@@ -86,8 +86,13 @@ async fn main() {
     }
 }
 
-fn init_logger() {
-    let env = Env::default().default_filter_or("ss_rs=info");
+fn init_logger(verbose: bool) {
+    let fallback_filter = match verbose {
+        true => "ss_rs=debug",
+        false => "ss_rs=info",
+    };
+
+    let env = Env::default().default_filter_or(fallback_filter);
 
     Builder::from_env(env)
         .format(|buf, record| {
