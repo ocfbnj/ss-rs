@@ -1,6 +1,6 @@
 [package]
 name = "ss-rs"
-version = "0.2.7"
+version = "0.2.8"
 authors = ["ocfbnj"]
 edition = "2021"
 description = "An unofficial shadowsocks implementation that can work with official shadowsocks."
