@@ -9,7 +9,7 @@ use bitvec::{
     view::BitView,
 };
 
-use crate::net::cidr::Cidr;
+use crate::acl::cidr::Cidr;
 
 struct Trie {
     root: TrieNode,

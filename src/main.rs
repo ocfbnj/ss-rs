@@ -24,7 +24,7 @@ async fn main() {
     let method = args.method;
     let password = args.password;
 
-    let remote_addr = match ss_rs::net::io::lookup_host(&args.remote_addr).await {
+    let remote_addr = match ss_rs::net::lookup_host(&args.remote_addr).await {
         Ok(addr) => addr,
         Err(e) => {
             log::error!("Resolve {} failed: {}", args.remote_addr, e);
@@ -34,7 +34,7 @@ async fn main() {
 
     let mut local_addr = None;
     if let Some(addr) = args.local_addr {
-        match ss_rs::net::io::lookup_host(&addr).await {
+        match ss_rs::net::lookup_host(&addr).await {
             Ok(addr) => local_addr = Some(addr),
             Err(e) => {
                 log::error!("Resolve {} failed: {}", addr, e);

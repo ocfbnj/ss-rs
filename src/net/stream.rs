@@ -17,10 +17,8 @@ use crate::{
         cipher::{Cipher, Method},
         hkdf_sha1, Nonce,
     },
-    net::{buf::OwnedReadBuf, io::constants::MAXIMUM_PAYLOAD_SIZE},
+    net::{buf::OwnedReadBuf, constants::MAXIMUM_PAYLOAD_SIZE, poll_read_exact},
 };
-
-use crate::net::io::poll_read_exact;
 
 /// A shadowsocks tcp stream.
 pub struct TcpStream<T> {

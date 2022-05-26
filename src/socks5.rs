@@ -8,9 +8,7 @@ use std::{
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-use crate::socks::{socks4::Socks4Addr, Error, SocksAddr};
-
-/// SOCKS5 protocol related constants
+/// SOCKS5 protocol related constants.
 pub mod constants {
     pub const VERSION: u8 = 0x05;
 
@@ -133,30 +131,60 @@ impl Display for Socks5Addr {
     }
 }
 
-impl From<SocksAddr> for Socks5Addr {
-    fn from(addr: SocksAddr) -> Self {
-        match addr {
-            SocksAddr::Socks4Addr(addr) => match addr {
-                Socks4Addr::Ipv4(ipv4) => Socks5Addr::Ipv4(ipv4),
-                Socks4Addr::DomainName(domain_name) => Socks5Addr::DomainName(domain_name),
-            },
-            SocksAddr::Socks5Addr(addr) => addr,
+/// Errors when handle SOCKS5 protocols.
+#[derive(Debug)]
+pub enum Error {
+    /// Unsupported socks version.
+    Version(u8),
+
+    /// Socks version number is inconsistent with before.
+    VersionInconsistent { now: u8, before: u8 },
+
+    /// No supported socks method found.
+    Method,
+
+    /// Unsupported socks command.
+    Command(u8),
+
+    /// The requested domain name is not a string.
+    DomainName,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::Version(v) => write!(f, "{} is the unsupported socks version", v),
+            Error::VersionInconsistent { now, before } => {
+                write!(
+                    f,
+                    "socks version number({}) is inconsistent with before({})",
+                    now, before
+                )
+            }
+            Error::Method => write!(f, "only support the NO AUTHENTICATION method"),
+            Error::Command(cmd) => write!(f, "only support the CONNECT method, request {}", cmd),
+            Error::DomainName => write!(f, "the requested domain name is not a string"),
         }
     }
 }
 
+impl std::error::Error for Error {}
+
 /// SOCKS5 handshake.
-///
-/// Notes: The first bytes is missing.
 pub async fn handshake<S>(stream: &mut S) -> io::Result<Socks5Addr>
 where
     S: AsyncRead + AsyncWrite + Unpin + ?Sized,
 {
     // Stage 1
-    let mut n_methods = [0u8];
-    stream.read_exact(&mut n_methods).await?;
+    let mut buf = [0u8; 2];
+    stream.read_exact(&mut buf).await?;
 
-    let mut methods = vec![0u8; n_methods[0] as usize];
+    let ver = buf[0];
+    if ver != constants::VERSION {
+        return Err(io::Error::new(io::ErrorKind::Other, Error::Version(ver)));
+    }
+
+    let mut methods = vec![0u8; buf[1] as usize];
     stream.read_exact(&mut methods).await?;
 
     if !methods

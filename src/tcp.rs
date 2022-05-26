@@ -15,8 +15,8 @@ use tokio::{
 use crate::{
     context::Ctx,
     crypto::cipher::Method,
-    net::{io::lookup_host, stream::TcpStream as SsTcpStream},
-    socks::{self, socks5::Socks5Addr},
+    net::{lookup_host, stream::TcpStream as SsTcpStream},
+    socks5::{self, Socks5Addr},
 };
 
 /// TCP Listener for incoming shadowsocks connection.
@@ -199,7 +199,7 @@ pub async fn handle_ss_local(
     ctx: Arc<Ctx>,
 ) {
     // 1. Constructs a socks5 address with timeout
-    let result = tokio::time::timeout(Duration::from_secs(15), socks::handshake(&mut stream));
+    let result = tokio::time::timeout(Duration::from_secs(15), socks5::handshake(&mut stream));
     let target_addr: Socks5Addr = match result.await {
         Ok(Ok(addr)) => addr.into(),
         Ok(Err(e)) => {

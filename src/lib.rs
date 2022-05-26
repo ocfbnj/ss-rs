@@ -55,5 +55,5 @@ pub mod context;
 pub mod crypto;
 pub mod net;
 pub mod security;
-pub mod socks;
+pub mod socks5;
 pub mod tcp;

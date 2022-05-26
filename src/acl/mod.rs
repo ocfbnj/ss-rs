@@ -1,5 +1,6 @@
 //! Access control list.
 
+pub mod cidr;
 pub mod ip_set;
 pub mod rule_set;
 
@@ -8,8 +9,8 @@ use std::{io, net::IpAddr, path::Path};
 use regex::Regex;
 
 use crate::{
+    acl::cidr::Cidr,
     acl::{ip_set::IpSet, rule_set::RuleSet},
-    net::cidr::Cidr,
 };
 
 /// Access control list.
