@@ -1,120 +1,22 @@
 //! Utility I/O functions.
 
 use std::{
-    io::{self, ErrorKind},
+    io::{self},
     net::SocketAddr,
     pin::Pin,
     task::{Context, Poll},
-    time::Duration,
 };
 
 use futures_core::ready;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
+use tokio::io::{AsyncRead, ReadBuf};
 
 use crate::net::buf::OwnedReadBuf;
 
-pub(crate) mod constants {
+pub mod constants {
     /// The maximum payload size of shadowsocks.
     pub const MAXIMUM_PAYLOAD_SIZE: usize = 0x3FFF;
     // const MAXIMUM_TAG_SIZE: usize = 16;
     // const MAXIMUM_MESSAGE_SIZE: usize = 2 + MAXIMUM_PAYLOAD_SIZE + 2 * MAXIMUM_TAG_SIZE;
-}
-
-/// Copies from reader to writer only once.
-///
-/// Returns the number of bytes copied.
-#[inline]
-pub async fn copy_once<R, W>(reader: &mut R, writer: &mut W) -> io::Result<usize>
-where
-    R: AsyncRead + Unpin + ?Sized,
-    W: AsyncWrite + Unpin + ?Sized,
-{
-    let mut payload = [0u8; constants::MAXIMUM_PAYLOAD_SIZE];
-
-    let bytes_copied = reader.read(&mut payload).await?;
-    if bytes_copied != 0 {
-        writer.write_all(&payload[..bytes_copied]).await?;
-    }
-
-    Ok(bytes_copied)
-}
-
-/// Transfers bidirectionally the payload between A and B.
-///
-/// Returns (A to B bytes transferred, B to A byte stransferred).
-pub async fn transfer_between<A, B>(a: A, b: B, timeout: Duration) -> io::Result<(usize, usize)>
-where
-    A: AsyncRead + AsyncWrite + Send,
-    B: AsyncRead + AsyncWrite + Send,
-{
-    let (mut ra, mut wa) = tokio::io::split(a);
-    let (mut rb, mut wb) = tokio::io::split(b);
-
-    let mut atob = 0;
-    let mut btoa = 0;
-
-    let mut atob_done = false;
-    let mut btoa_done = false;
-
-    let mut atob_err = None;
-    let mut btoa_err = None;
-
-    while !atob_done || !btoa_done {
-        tokio::select! {
-            _ = tokio::time::sleep(timeout) => {
-                return Err(
-                    io::Error::new(
-                        ErrorKind::TimedOut,
-                        format!("there are no data in the past {} seconds", timeout.as_secs())
-                    )
-                );
-            }
-            res = copy_once(&mut ra, &mut wb), if atob_done == false => {
-                match res {
-                    Ok(0) => {
-                        atob_done = true;
-                        wb.shutdown().await.unwrap_or_default();
-                    }
-                    Ok(n) => atob += n,
-                    Err(e) => {
-                        atob_done = true;
-                        atob_err = Some(e);
-                        wb.shutdown().await.unwrap_or_default();
-                    },
-                }
-            }
-            res = copy_once(&mut rb, &mut wa), if btoa_done == false => {
-                match res {
-                    Ok(0) => {
-                        btoa_done = true;
-                        wa.shutdown().await.unwrap_or_default();
-                    }
-                    Ok(n) => btoa += n,
-                    Err(e) => {
-                        btoa_done = true;
-                        btoa_err = Some(e);
-                        wa.shutdown().await.unwrap_or_default();
-                    },
-                }
-            }
-        }
-    }
-
-    if let Some(err) = atob_err {
-        return Err(io::Error::new(
-            err.kind(),
-            format!("ltor {}", err.to_string()),
-        ));
-    }
-
-    if let Some(err) = btoa_err {
-        return Err(io::Error::new(
-            err.kind(),
-            format!("rtol {}", err.to_string()),
-        ));
-    }
-
-    Ok((atob, btoa))
 }
 
 /// Resolves target socket address.

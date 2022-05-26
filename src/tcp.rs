@@ -15,10 +15,7 @@ use tokio::{
 use crate::{
     context::Ctx,
     crypto::cipher::Method,
-    net::{
-        io::{lookup_host, transfer_between},
-        stream::TcpStream as SsTcpStream,
-    },
+    net::{io::lookup_host, stream::TcpStream as SsTcpStream},
     socks::{self, socks5::Socks5Addr},
 };
 
@@ -173,7 +170,7 @@ where
     );
 
     // 5. Connects to target address
-    let target_stream = match TokioTcpStream::connect(target_socket_addr).await {
+    let mut target_stream = match TokioTcpStream::connect(target_socket_addr).await {
         Ok(stream) => stream,
         Err(e) => {
             log::debug!(
@@ -189,7 +186,7 @@ where
 
     // 6. Establishes connection between ss-local and target
     let trans = format!("{} <=> {} ({})", peer, target_addr, target_ip);
-    transfer(stream, target_stream, &trans).await;
+    transfer(&mut stream, &mut target_stream, &trans).await;
 }
 
 /// Handles incoming connection from ss-local.
@@ -241,7 +238,7 @@ pub async fn handle_ss_local(
             );
 
             // 3.1 Connects to target host
-            let target_stream = match TokioTcpStream::connect(addr).await {
+            let mut target_stream = match TokioTcpStream::connect(addr).await {
                 Ok(stream) => stream,
                 Err(e) => {
                     log::error!(
@@ -256,7 +253,7 @@ pub async fn handle_ss_local(
             };
 
             // 3.2 Establishes connection between ss-local and target
-            transfer(stream, target_stream, &trans).await;
+            transfer(&mut stream, &mut target_stream, &trans).await;
         }
         _ => {
             trans = format!("{} <=> {}", peer, target_addr);
@@ -288,17 +285,17 @@ pub async fn handle_ss_local(
             }
 
             // 3.3 Establishes connection between ss-local and ss-remote
-            transfer(stream, target_stream, &trans).await;
+            transfer(&mut stream, &mut target_stream, &trans).await;
         }
     }
 }
 
-async fn transfer<A, B>(a: A, b: B, trans: &str)
+async fn transfer<A, B>(a: &mut A, b: &mut B, trans: &str)
 where
-    A: AsyncRead + AsyncWrite + Send,
-    B: AsyncRead + AsyncWrite + Send,
+    A: AsyncRead + AsyncWrite + Unpin + ?Sized,
+    B: AsyncRead + AsyncWrite + Unpin + ?Sized,
 {
-    match transfer_between(a, b, Duration::from_secs(90)).await {
+    match tokio::io::copy_bidirectional(a, b).await {
         Ok((atob, btoa)) => log::trace!("{} done: ltor {} bytes, rtol {} bytes", trans, atob, btoa),
         Err(e) => match e.kind() {
             ErrorKind::Other => log::warn!("{} error: {}", trans, e),
