@@ -11,6 +11,7 @@ An unofficial shadowsocks implementation that can work with official shadowsocks
 - [x] [AEAD](https://shadowsocks.org/en/wiki/AEAD-Ciphers.html) ciphers
 - [x] Defend against [replay attacks](https://github.com/shadowsocks/shadowsocks-org/issues/44)
 - [x] [Access control list](https://github.com/shadowsocks/shadowsocks-rust#acl)
+- [x] [SIP003](https://github.com/shadowsocks/shadowsocks-org/issues/28) Plugins
 
 ## Get Started
 
