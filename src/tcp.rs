@@ -8,7 +8,7 @@ use std::{
 };
 
 use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener as TokioTcpListener, TcpStream as TokioTcpStream, ToSocketAddrs},
 };
 
@@ -130,7 +130,12 @@ where
         Ok(Ok(addr)) => addr,
         Ok(Err(e)) => {
             match e.kind() {
-                ErrorKind::Other => log::warn!("Read target address failed: {}, peer {}", e, peer),
+                ErrorKind::Other => {
+                    log::warn!("Read target address failed: {}, peer {}", e, peer);
+                    // We shouldn't close the connection,
+                    // See https://github.com/shadowsocks/shadowsocks-rust/issues/292
+                    read_to_end(&mut stream).await.unwrap_or_default();
+                }
                 _ => log::debug!("Read target address failed: {}, peer {}", e, peer),
             }
             return;
@@ -302,4 +307,20 @@ where
             _ => log::debug!("{} error: {}", trans, e),
         },
     }
+}
+
+async fn read_to_end<R>(reader: &mut R) -> io::Result<()>
+where
+    R: AsyncRead + Unpin + ?Sized,
+{
+    let mut buf = [0; 2048];
+
+    loop {
+        let n = reader.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+    }
+
+    Ok(())
 }
