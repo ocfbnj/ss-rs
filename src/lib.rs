@@ -54,6 +54,7 @@ pub mod acl;
 pub mod context;
 pub mod crypto;
 pub mod net;
+pub mod plugin;
 pub mod security;
 pub mod socks5;
 pub mod tcp;

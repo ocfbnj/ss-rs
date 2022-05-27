@@ -35,6 +35,14 @@ pub struct Args {
     #[clap(long = "acl")]
     pub acl_path: Option<PathBuf>,
 
+    /// Plugin
+    #[clap(long)]
+    pub plugin: Option<String>,
+
+    /// Plugin options
+    #[clap(long)]
+    pub plugin_opts: Option<String>,
+
     /// Debug mode
     #[clap(short, long)]
     pub verbose: bool,

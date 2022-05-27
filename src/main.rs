@@ -9,10 +9,12 @@ use ss_rs::{
     acl::Acl,
     context::Ctx,
     crypto::derive_key,
+    plugin::start_plugin,
     tcp::{ss_local, ss_remote},
 };
 
 use args::Args;
+use tokio::process::Child;
 
 #[tokio::main]
 async fn main() {
@@ -23,8 +25,9 @@ async fn main() {
 
     let method = args.method;
     let password = args.password;
+    let is_server = args.local_addr.is_none();
 
-    let remote_addr = match ss_rs::net::lookup_host(&args.remote_addr).await {
+    let mut remote_addr = match ss_rs::net::lookup_host(&args.remote_addr).await {
         Ok(addr) => addr,
         Err(e) => {
             log::error!("Resolve {} failed: {}", args.remote_addr, e);
@@ -62,28 +65,67 @@ async fn main() {
     }
     let ctx = Arc::new(ctx);
 
-    // 4. Starts shadowsocks server
+    // 4. Starts plugin
+    let mut plugin = None;
+
+    if let Some(plugin_name) = args.plugin {
+        let (addr, process) = match start_plugin(
+            &plugin_name,
+            &args.plugin_opts.unwrap_or_default(),
+            remote_addr,
+            is_server,
+        ) {
+            Ok(res) => res,
+            Err(e) => {
+                log::error!("Unable to start plugin: {}", e);
+                return;
+            }
+        };
+
+        remote_addr = addr;
+        plugin = Some(process);
+    }
+
+    // 5. Starts shadowsocks server
     if let Some(local_addr) = local_addr {
         tokio::select! {
-            _ = tokio::signal::ctrl_c() => {},
+            _ = tokio::signal::ctrl_c() => {}
+            res = async { plugin.as_mut().map(|p| p.wait()).unwrap().await }, if plugin.is_some() => {
+                match res {
+                    Ok(x) => log::error!("Plugin exited with status: {}", x),
+                    Err(e) => log::error!("Wait plugin failed: {}", e),
+                }
+
+                return;
+            }
             res = ss_local(local_addr, remote_addr, method, key, ctx) => {
                 match res {
                     Ok(_) => {}
                     Err(e) => log::error!("Unable to start ss-local: {}", e),
                 }
-            },
+            }
         }
     } else {
         tokio::select! {
-            _ = tokio::signal::ctrl_c() => {},
+            _ = tokio::signal::ctrl_c() => {}
+            res = async { plugin.as_mut().map(|p| p.wait()).unwrap().await }, if plugin.is_some() => {
+                match res {
+                    Ok(x) => log::error!("Plugin exited with status: {}", x),
+                    Err(e) => log::error!("Wait plugin failed: {}", e),
+                }
+
+                return;
+            }
             res = ss_remote(remote_addr, method, key, ctx) => {
                 match res {
                     Ok(_) => {}
                     Err(e) => log::error!("Unable to start ss-remote: {}", e),
                 }
-            },
+            }
         }
     }
+
+    kill_plugin(plugin).await;
 }
 
 fn init_logger(verbose: bool) {
@@ -108,4 +150,13 @@ fn init_logger(verbose: bool) {
             )
         })
         .init();
+}
+
+async fn kill_plugin(process: Option<Child>) {
+    if let Some(mut child) = process {
+        match child.kill().await {
+            Ok(_) => {}
+            Err(e) => log::error!("Kill plugin failed: {}", e),
+        };
+    }
 }
