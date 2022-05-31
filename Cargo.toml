@@ -17,6 +17,8 @@ spin = "0.9.3"
 bloom = "0.3.2"
 regex = "1.5.6"
 bitvec = "1.0.0"
+base64 = "0.13.0"
+urlencoding = "2.1.0"
 clap = { version = "3.1.18", features = ["derive"] }
 
 # async

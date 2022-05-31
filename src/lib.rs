@@ -58,3 +58,4 @@ pub mod plugin;
 pub mod security;
 pub mod socks5;
 pub mod tcp;
+pub mod url;
