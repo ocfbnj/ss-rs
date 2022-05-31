@@ -7,6 +7,7 @@ use std::{
 
 use crate::crypto::cipher::Method;
 
+/// Represents a SS-URL.
 #[derive(Debug)]
 pub struct SsUrl {
     method: Method,
@@ -171,6 +172,7 @@ fn parse_plugin(s: &str) -> Result<(Option<String>, Option<String>), ErrorKind> 
     }
 }
 
+/// Errors when parsing a SS-URL.
 #[derive(Debug)]
 pub enum ErrorKind {
     /// Not a SS-URL.
