@@ -3,6 +3,7 @@
 use std::{
     io::{self, ErrorKind},
     net::SocketAddr,
+    pin::Pin,
     sync::Arc,
     time::Duration,
 };
@@ -15,7 +16,10 @@ use tokio::{
 use crate::{
     context::Ctx,
     crypto::cipher::Method,
-    net::{lookup_host, stream::TcpStream as SsTcpStream},
+    net::{
+        lookup_host,
+        stream::{TcpStream as SsTcpStream, TimeoutStream},
+    },
     socks5::{self, Socks5Addr},
 };
 
@@ -175,7 +179,7 @@ where
     );
 
     // 5. Connects to target address
-    let mut target_stream = match TokioTcpStream::connect(target_socket_addr).await {
+    let target_stream = match TokioTcpStream::connect(target_socket_addr).await {
         Ok(stream) => stream,
         Err(e) => {
             log::debug!(
@@ -191,7 +195,14 @@ where
 
     // 6. Establishes connection between ss-local and target
     let trans = format!("{} <=> {} ({})", peer, target_addr, target_ip);
-    transfer(&mut stream, &mut target_stream, &trans).await;
+    let mut stream = TimeoutStream::new(stream, Duration::from_secs(60));
+    let mut target_stream = TimeoutStream::new(target_stream, Duration::from_secs(60));
+    transfer(
+        &mut unsafe { Pin::new_unchecked(&mut stream) },
+        &mut unsafe { Pin::new_unchecked(&mut target_stream) },
+        &trans,
+    )
+    .await;
 }
 
 /// Handles incoming connection from ss-local.

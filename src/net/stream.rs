@@ -6,10 +6,14 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
+    time::Duration,
 };
 
-use futures_core::ready;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use futures_core::{ready, Future};
+use tokio::{
+    io::{AsyncRead, AsyncWrite, ReadBuf},
+    time::{Instant, Sleep},
+};
 
 use crate::{
     context::Ctx,
@@ -342,6 +346,91 @@ where
     }
 }
 
+/// A stream with timeout.
+///
+/// A successful read or write on the stream will reset the timeout.
+pub struct TimeoutStream<T> {
+    inner_stream: T,
+    duration: Duration,
+    sleep: Sleep,
+}
+
+impl<T> TimeoutStream<T> {
+    /// Creates a new timeout stream with the given duration.
+    pub fn new(inner_stream: T, duration: Duration) -> Self {
+        TimeoutStream {
+            inner_stream,
+            duration,
+            sleep: tokio::time::sleep_until(Instant::now() + duration),
+        }
+    }
+}
+
+impl<T> TimeoutStream<T> {
+    fn check_timeout(&mut self, cx: &mut Context<'_>) -> io::Result<()> {
+        match unsafe { Pin::new_unchecked(&mut self.sleep) }.poll(cx) {
+            Poll::Ready(_) => Err(io::ErrorKind::TimedOut.into()),
+            Poll::Pending => Ok(()),
+        }
+    }
+
+    fn reset_timeout(&mut self) {
+        unsafe { Pin::new_unchecked(&mut self.sleep) }.reset(Instant::now() + self.duration);
+    }
+}
+
+impl<T> AsyncRead for TimeoutStream<T>
+where
+    T: AsyncRead + Unpin,
+{
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let this = unsafe { self.get_unchecked_mut() };
+        let ret = Pin::new(&mut this.inner_stream).poll_read(cx, buf);
+
+        match ret {
+            Poll::Ready(_) => this.reset_timeout(),
+            Poll::Pending => this.check_timeout(cx)?,
+        }
+
+        ret
+    }
+}
+
+impl<T> AsyncWrite for TimeoutStream<T>
+where
+    T: AsyncWrite + Unpin,
+{
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        let this = unsafe { self.get_unchecked_mut() };
+        let ret = Pin::new(&mut this.inner_stream).poll_write(cx, buf);
+
+        match ret {
+            Poll::Ready(_) => this.reset_timeout(),
+            Poll::Pending => this.check_timeout(cx)?,
+        }
+
+        ret
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        let this = unsafe { self.get_unchecked_mut() };
+        Pin::new(&mut this.inner_stream).poll_flush(cx)
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        let this = unsafe { self.get_unchecked_mut() };
+        Pin::new(&mut this.inner_stream).poll_shutdown(cx)
+    }
+}
+
 /// Errors during shadowsocks communication.
 #[derive(Debug)]
 pub enum Error {
@@ -380,3 +469,44 @@ enum WriteState {
     WritePayload,
     WritePayloadOut,
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use std::{pin::Pin, time::Duration};
+
+//     use tokio::{
+//         io::{AsyncReadExt, AsyncWriteExt},
+//         net::TcpListener,
+//     };
+
+//     use super::TimeoutStream;
+
+//     #[tokio::test]
+//     async fn test_timeout() {
+//         let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
+
+//         loop {
+//             let (stream, _) = listener.accept().await.unwrap();
+//             let mut stream = TimeoutStream::new(stream, Duration::from_secs(3));
+
+//             tokio::spawn(async move {
+//                 let mut stream = unsafe { Pin::new_unchecked(&mut stream) };
+
+//                 loop {
+//                     let mut buf = [0u8; 1024];
+//                     match stream.read(&mut buf).await {
+//                         Ok(0) => return,
+//                         Ok(n) => {
+//                             print!("{}", String::from_utf8(buf[..n].to_owned()).unwrap());
+//                             stream.write(&buf[..n]).await.unwrap();
+//                         }
+//                         Err(e) => {
+//                             println!("{}", e);
+//                             return;
+//                         }
+//                     }
+//                 }
+//             });
+//         }
+//     }
+// }
