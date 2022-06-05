@@ -138,13 +138,15 @@ fn init_logger(verbose: bool) {
 
     Builder::from_env(env)
         .format(|buf, record| {
-            let timestamp = buf.timestamp_millis();
+            let datetime = chrono::Local::now();
+            let datetime = datetime.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+
             let style = buf.default_level_style(record.level());
 
             writeln!(
                 buf,
                 "[{} {}] {}",
-                timestamp,
+                datetime,
                 style.value(record.level()),
                 record.args()
             )
