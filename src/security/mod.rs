@@ -1,7 +1,8 @@
 //! Networking security facilities for shadowsocks communication.
 
+use std::sync::Mutex;
+
 use bloom::{BloomFilter, ASMS};
-use spin::Mutex;
 
 mod constants {
     pub const EXPECTED_NUM_ITEMS: u32 = 1_000_000;
@@ -63,6 +64,6 @@ impl ReplayProtection {
     ///
     /// Returns true if the element was successfully inserted.
     pub fn check_and_insert(&self, element: &[u8]) -> bool {
-        self.bloom.lock().check_and_insert(&element)
+        self.bloom.lock().unwrap().check_and_insert(&element)
     }
 }

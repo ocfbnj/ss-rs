@@ -17,7 +17,6 @@ strip = true
 panic = "abort"
 
 [dependencies]
-spin = "0.9.3"
 bloom = "0.3.2"
 regex = "1.5.6"
 bitvec = "1.0.0"
