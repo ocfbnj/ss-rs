@@ -17,6 +17,10 @@ strip = true
 lto = true
 panic = "abort"
 
+[features]
+default = []
+ss-url = []
+
 [dependencies]
 bloom = "0.3.2"
 regex = "1.5.6"
