@@ -2,7 +2,6 @@ mod args;
 
 use std::{io::Write, sync::Arc};
 
-use clap::Parser;
 use env_logger::{Builder, Env};
 
 use ss_rs::{
@@ -14,13 +13,12 @@ use ss_rs::{
     url::SsUrl,
 };
 
-use args::Args;
 use tokio::process::Child;
 
 #[tokio::main]
 async fn main() {
     // 1. Parses the command line arguments and initializes logger
-    let args = Args::parse();
+    let args = args::parse();
 
     init_logger(args.verbose);
 
@@ -35,6 +33,9 @@ async fn main() {
     if args.show_url {
         let url = SsUrl::from(args);
         println!("{}", url);
+        return;
+    } else if args.show_cfg {
+        println!("{:#?}", args);
         return;
     }
 
