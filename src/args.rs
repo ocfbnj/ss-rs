@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use ss_rs::crypto::cipher::Method;
+use ss_rs::{crypto::cipher::Method, url::SsUrl};
 
 /// Command-line parameter definitions for the ss-rs program.
 #[derive(Parser, Debug)]
@@ -46,4 +46,23 @@ pub struct Args {
     /// Debug mode
     #[clap(short, long)]
     pub verbose: bool,
+
+    #[clap(long)]
+    pub show_url: bool,
+}
+
+impl From<Args> for SsUrl {
+    fn from(args: Args) -> Self {
+        let (hostname, port) = args.remote_addr.split_once(':').unwrap();
+
+        SsUrl {
+            method: args.method,
+            password: args.password,
+            hostname: hostname.to_owned(),
+            port: port.parse().unwrap(),
+            plugin: args.plugin,
+            plugin_opts: args.plugin_opts,
+            tag: None,
+        }
+    }
 }

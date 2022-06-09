@@ -58,5 +58,4 @@ pub mod plugin;
 pub mod security;
 pub mod socks5;
 pub mod tcp;
-#[cfg(feature = "ss-url")]
 pub mod url;

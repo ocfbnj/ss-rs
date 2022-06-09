@@ -11,6 +11,7 @@ use ss_rs::{
     crypto::derive_key,
     plugin::start_plugin,
     tcp::{ss_local, ss_remote},
+    url::SsUrl,
 };
 
 use args::Args;
@@ -23,10 +24,6 @@ async fn main() {
 
     init_logger(args.verbose);
 
-    let method = args.method;
-    let password = args.password;
-    let is_server = args.local_addr.is_none();
-
     let mut remote_addr = match ss_rs::net::lookup_host(&args.remote_addr).await {
         Ok(addr) => addr,
         Err(e) => {
@@ -34,6 +31,16 @@ async fn main() {
             return;
         }
     };
+
+    if args.show_url {
+        let url = SsUrl::from(args);
+        println!("{}", url);
+        return;
+    }
+
+    let method = args.method;
+    let password = args.password;
+    let is_server = args.local_addr.is_none();
 
     let mut local_addr = None;
     if let Some(addr) = args.local_addr {

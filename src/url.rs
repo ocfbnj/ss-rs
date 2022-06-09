@@ -10,13 +10,13 @@ use crate::crypto::cipher::Method;
 /// Represents a SS-URL.
 #[derive(Debug)]
 pub struct SsUrl {
-    method: Method,
-    password: String,
-    hostname: String,
-    port: u16,
-    plugin: Option<String>,
-    plugin_opts: Option<String>,
-    tag: Option<String>,
+    pub method: Method,
+    pub password: String,
+    pub hostname: String,
+    pub port: u16,
+    pub plugin: Option<String>,
+    pub plugin_opts: Option<String>,
+    pub tag: Option<String>,
 }
 
 impl FromStr for SsUrl {
