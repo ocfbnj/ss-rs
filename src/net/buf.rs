@@ -52,7 +52,7 @@ impl OwnedReadBuf {
 
     /// Requests a brand new unfilled buffer with the given amount of bytes.
     pub fn require(&mut self, n: usize) {
-        assert!(self.buf.is_empty());
+        debug_assert!(self.buf.is_empty());
 
         self.buf.reserve(n);
         self.offset = 0;

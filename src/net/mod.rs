@@ -49,7 +49,7 @@ where
         owned_read_buf.require(buf.len());
     }
 
-    assert_eq!(owned_read_buf.capacity(), buf.len());
+    debug_assert_eq!(owned_read_buf.capacity(), buf.len());
 
     while !owned_read_buf.is_full() {
         let mut read_buf = ReadBuf::new(owned_read_buf.uninitialized_mut());
