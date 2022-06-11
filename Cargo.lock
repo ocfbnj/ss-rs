@@ -569,7 +569,7 @@ dependencies = [
 
 [[package]]
 name = "ss-rs"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "aead",
  "aes-gcm",
