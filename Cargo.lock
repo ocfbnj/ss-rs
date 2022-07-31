@@ -584,6 +584,7 @@ dependencies = [
  "hkdf",
  "log",
  "md5",
+ "pin-project-lite",
  "rand",
  "regex",
  "sha1",

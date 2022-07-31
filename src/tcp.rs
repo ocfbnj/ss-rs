@@ -23,6 +23,10 @@ use crate::{
     socks5::{self, Socks5Addr},
 };
 
+mod constants {
+    pub const DEFAULT_TIMEOUT: u64 = 60;
+}
+
 /// TCP Listener for incoming shadowsocks connection.
 pub struct SsTcpListener {
     inner_listener: TokioTcpListener,
@@ -179,7 +183,7 @@ where
     );
 
     // 5. Connects to target address
-    let target_stream = match TokioTcpStream::connect(target_socket_addr).await {
+    let mut target_stream = match TokioTcpStream::connect(target_socket_addr).await {
         Ok(stream) => stream,
         Err(e) => {
             log::debug!(
@@ -195,14 +199,7 @@ where
 
     // 6. Establishes connection between ss-local and target
     let trans = format!("{} <=> {} ({})", peer, target_addr, target_ip);
-    let mut stream = TimeoutStream::new(stream, Duration::from_secs(60));
-    let mut target_stream = TimeoutStream::new(target_stream, Duration::from_secs(60));
-    transfer(
-        &mut unsafe { Pin::new_unchecked(&mut stream) },
-        &mut unsafe { Pin::new_unchecked(&mut target_stream) },
-        &trans,
-    )
-    .await;
+    transfer(&mut stream, &mut target_stream, &trans).await;
 }
 
 /// Handles incoming connection from ss-local.
@@ -311,7 +308,13 @@ where
     A: AsyncRead + AsyncWrite + Unpin + ?Sized,
     B: AsyncRead + AsyncWrite + Unpin + ?Sized,
 {
-    match tokio::io::copy_bidirectional(a, b).await {
+    let mut timed_a = TimeoutStream::new(a, Duration::from_secs(constants::DEFAULT_TIMEOUT));
+    let mut timed_b = TimeoutStream::new(b, Duration::from_secs(constants::DEFAULT_TIMEOUT));
+
+    let mut pinned_a = unsafe { Pin::new_unchecked(&mut timed_a) };
+    let mut pinned_b = unsafe { Pin::new_unchecked(&mut timed_b) };
+
+    match tokio::io::copy_bidirectional(&mut pinned_a, &mut pinned_b).await {
         Ok((atob, btoa)) => log::trace!("{} done: ltor {} bytes, rtol {} bytes", trans, atob, btoa),
         Err(e) => match e.kind() {
             ErrorKind::Other => log::warn!("{} error: {}", trans, e),
@@ -325,9 +328,12 @@ where
     R: AsyncRead + Unpin + ?Sized,
 {
     let mut buf = [0; 2048];
+    let mut timed_reader =
+        TimeoutStream::new(reader, Duration::from_secs(constants::DEFAULT_TIMEOUT));
+    let mut pinned_reader = unsafe { Pin::new_unchecked(&mut timed_reader) };
 
     loop {
-        let n = reader.read(&mut buf).await?;
+        let n = pinned_reader.read(&mut buf).await?;
         if n == 0 {
             break;
         }

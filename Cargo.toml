@@ -28,6 +28,7 @@ clap = { version = "3.1.18", features = ["cargo"] }
 
 # async
 futures-core = "0.3.21"
+pin-project-lite = "0.2.9"
 tokio = { version = "1.18.2", features = [
     "rt-multi-thread",
     "net",

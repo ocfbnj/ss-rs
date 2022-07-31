@@ -10,6 +10,7 @@ use std::{
 };
 
 use futures_core::{ready, Future};
+use pin_project_lite::pin_project;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     time::{Instant, Sleep},
@@ -346,13 +347,17 @@ where
     }
 }
 
-/// A stream with timeout.
-///
-/// A successful read or write on the stream will reset the timeout.
-pub struct TimeoutStream<T> {
-    inner_stream: T,
-    duration: Duration,
-    sleep: Sleep,
+pin_project! {
+    /// A stream with timeout.
+    ///
+    /// A successful read or write on the stream will reset the timeout.
+    pub struct TimeoutStream<T> {
+        inner_stream: T,
+        duration: Duration,
+
+        #[pin]
+        sleep: Sleep,
+    }
 }
 
 impl<T> TimeoutStream<T> {
@@ -367,15 +372,15 @@ impl<T> TimeoutStream<T> {
 }
 
 impl<T> TimeoutStream<T> {
-    fn check_timeout(&mut self, cx: &mut Context<'_>) -> io::Result<()> {
-        match unsafe { Pin::new_unchecked(&mut self.sleep) }.poll(cx) {
+    fn check_timeout(sleep: Pin<&mut Sleep>, cx: &mut Context<'_>) -> io::Result<()> {
+        match sleep.poll(cx) {
             Poll::Ready(_) => Err(io::ErrorKind::TimedOut.into()),
             Poll::Pending => Ok(()),
         }
     }
 
-    fn reset_timeout(&mut self) {
-        unsafe { Pin::new_unchecked(&mut self.sleep) }.reset(Instant::now() + self.duration);
+    fn reset_timeout(sleep: Pin<&mut Sleep>, duration: Duration) {
+        sleep.reset(Instant::now() + duration);
     }
 }
 
@@ -388,12 +393,12 @@ where
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        let this = unsafe { self.get_unchecked_mut() };
-        let ret = Pin::new(&mut this.inner_stream).poll_read(cx, buf);
+        let this = self.project();
+        let ret = Pin::new(this.inner_stream).poll_read(cx, buf);
 
         match ret {
-            Poll::Ready(_) => this.reset_timeout(),
-            Poll::Pending => this.check_timeout(cx)?,
+            Poll::Ready(_) => Self::reset_timeout(this.sleep, *this.duration),
+            Poll::Pending => Self::check_timeout(this.sleep, cx)?,
         }
 
         ret
@@ -409,25 +414,25 @@ where
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        let this = unsafe { self.get_unchecked_mut() };
-        let ret = Pin::new(&mut this.inner_stream).poll_write(cx, buf);
+        let this = self.project();
+        let ret = Pin::new(this.inner_stream).poll_write(cx, buf);
 
         match ret {
-            Poll::Ready(_) => this.reset_timeout(),
-            Poll::Pending => this.check_timeout(cx)?,
+            Poll::Ready(_) => Self::reset_timeout(this.sleep, *this.duration),
+            Poll::Pending => Self::check_timeout(this.sleep, cx)?,
         }
 
         ret
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        let this = unsafe { self.get_unchecked_mut() };
-        Pin::new(&mut this.inner_stream).poll_flush(cx)
+        let this = self.project();
+        Pin::new(this.inner_stream).poll_flush(cx)
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        let this = unsafe { self.get_unchecked_mut() };
-        Pin::new(&mut this.inner_stream).poll_shutdown(cx)
+        let this = self.project();
+        Pin::new(this.inner_stream).poll_shutdown(cx)
     }
 }
 
