@@ -1,6 +1,6 @@
 //! Authenticated Encryption with Associated Data (AEAD) algorithms.
 
-use aead::{Aead, Key, NewAead, Nonce};
+use aead::{Aead, Key, KeyInit, Nonce};
 use aes_gcm::{Aes128Gcm, Aes256Gcm};
 use chacha20poly1305::ChaCha20Poly1305;
 
