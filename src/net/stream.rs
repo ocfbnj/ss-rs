@@ -352,11 +352,11 @@ pin_project! {
     ///
     /// A successful read or write on the stream will reset the timeout.
     pub struct TimeoutStream<T> {
-        inner_stream: T,
-        duration: Duration,
-
         #[pin]
-        sleep: Sleep,
+        inner_stream: T,
+
+        duration: Duration,
+        sleep: Option<Sleep>,
     }
 }
 
@@ -366,7 +366,7 @@ impl<T> TimeoutStream<T> {
         TimeoutStream {
             inner_stream,
             duration,
-            sleep: tokio::time::sleep_until(Instant::now() + duration),
+            sleep: None,
         }
     }
 }
@@ -386,7 +386,7 @@ impl<T> TimeoutStream<T> {
 
 impl<T> AsyncRead for TimeoutStream<T>
 where
-    T: AsyncRead + Unpin,
+    T: AsyncRead,
 {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -394,11 +394,18 @@ where
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         let this = self.project();
-        let ret = Pin::new(this.inner_stream).poll_read(cx, buf);
+        let ret = this.inner_stream.poll_read(cx, buf);
+
+        let sleep = unsafe {
+            Pin::new_unchecked(
+                this.sleep
+                    .get_or_insert(tokio::time::sleep_until(Instant::now() + *this.duration)),
+            )
+        };
 
         match ret {
-            Poll::Ready(_) => Self::reset_timeout(this.sleep, *this.duration),
-            Poll::Pending => Self::check_timeout(this.sleep, cx)?,
+            Poll::Ready(_) => Self::reset_timeout(sleep, *this.duration),
+            Poll::Pending => Self::check_timeout(sleep, cx)?,
         }
 
         ret
@@ -407,7 +414,7 @@ where
 
 impl<T> AsyncWrite for TimeoutStream<T>
 where
-    T: AsyncWrite + Unpin,
+    T: AsyncWrite,
 {
     fn poll_write(
         self: Pin<&mut Self>,
@@ -415,11 +422,18 @@ where
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
         let this = self.project();
-        let ret = Pin::new(this.inner_stream).poll_write(cx, buf);
+        let ret = this.inner_stream.poll_write(cx, buf);
+
+        let sleep = unsafe {
+            Pin::new_unchecked(
+                this.sleep
+                    .get_or_insert(tokio::time::sleep_until(Instant::now() + *this.duration)),
+            )
+        };
 
         match ret {
-            Poll::Ready(_) => Self::reset_timeout(this.sleep, *this.duration),
-            Poll::Pending => Self::check_timeout(this.sleep, cx)?,
+            Poll::Ready(_) => Self::reset_timeout(sleep, *this.duration),
+            Poll::Pending => Self::check_timeout(sleep, cx)?,
         }
 
         ret
@@ -427,12 +441,12 @@ where
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         let this = self.project();
-        Pin::new(this.inner_stream).poll_flush(cx)
+        this.inner_stream.poll_flush(cx)
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         let this = self.project();
-        Pin::new(this.inner_stream).poll_shutdown(cx)
+        this.inner_stream.poll_shutdown(cx)
     }
 }
 
