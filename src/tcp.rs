@@ -3,9 +3,7 @@
 use std::{
     io::{self, ErrorKind},
     net::SocketAddr,
-    pin::Pin,
     sync::Arc,
-    time::Duration,
 };
 
 use tokio::{
@@ -24,7 +22,9 @@ use crate::{
 };
 
 mod constants {
-    pub const DEFAULT_TIMEOUT: u64 = 60;
+    use std::time::Duration;
+
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 }
 
 /// TCP Listener for incoming shadowsocks connection.
@@ -122,10 +122,12 @@ pub async fn ss_local(
 }
 
 /// Handles incoming connection from ss-remote.
-pub async fn handle_ss_remote<T>(mut stream: SsTcpStream<T>, peer: SocketAddr, ctx: Arc<Ctx>)
+pub async fn handle_ss_remote<T>(stream: SsTcpStream<T>, peer: SocketAddr, ctx: Arc<Ctx>)
 where
     T: AsyncRead + AsyncWrite + Unpin + Send,
 {
+    let mut stream = make_timed_stream(stream);
+
     // 1. Checks whether or not to reject the client
     if ctx.is_bypass(peer.ip(), None) {
         log::warn!("Reject the client: peer {}", peer);
@@ -133,10 +135,9 @@ where
     }
 
     // 2. Constructs a socks5 address with timeout
-    let result = tokio::time::timeout(Duration::from_secs(15), Socks5Addr::construct(&mut stream));
-    let target_addr = match result.await {
-        Ok(Ok(addr)) => addr,
-        Ok(Err(e)) => {
+    let target_addr = match Socks5Addr::construct(&mut stream).await {
+        Ok(addr) => addr,
+        Err(e) => {
             match e.kind() {
                 ErrorKind::Other => {
                     log::warn!("Read target address failed: {}, peer {}", e, peer);
@@ -146,10 +147,6 @@ where
                 }
                 _ => log::debug!("Read target address failed: {}, peer {}", e, peer),
             }
-            return;
-        }
-        Err(e) => {
-            log::debug!("Read target address timed out: {}, peer {}", e, peer);
             return;
         }
     };
@@ -184,7 +181,7 @@ where
 
     // 5. Connects to target address
     let mut target_stream = match TokioTcpStream::connect(target_socket_addr).await {
-        Ok(stream) => stream,
+        Ok(stream) => make_timed_stream(stream),
         Err(e) => {
             log::debug!(
                 "Unable to connect to {} ({}): {}, peer {}",
@@ -204,26 +201,23 @@ where
 
 /// Handles incoming connection from ss-local.
 pub async fn handle_ss_local(
-    mut stream: TokioTcpStream,
+    stream: TokioTcpStream,
     peer: SocketAddr,
     remote_addr: SocketAddr,
     method: Method,
     key: Vec<u8>,
     ctx: Arc<Ctx>,
 ) {
+    let mut stream = make_timed_stream(stream);
+
     // 1. Constructs a socks5 address with timeout
-    let result = tokio::time::timeout(Duration::from_secs(15), socks5::handshake(&mut stream));
-    let target_addr: Socks5Addr = match result.await {
-        Ok(Ok(addr)) => addr.into(),
-        Ok(Err(e)) => {
+    let target_addr = match socks5::handshake(&mut stream).await {
+        Ok(addr) => addr,
+        Err(e) => {
             match e.kind() {
                 ErrorKind::Other => log::warn!("Read target address failed: {}, peer {}", e, peer),
                 _ => log::debug!("Read target address failed: {}, peer {}", e, peer),
             }
-            return;
-        }
-        Err(e) => {
-            log::debug!("Read target address timed out: {}, peer {}", e, peer);
             return;
         }
     };
@@ -252,7 +246,7 @@ pub async fn handle_ss_local(
 
             // 3.1 Connects to target host
             let mut target_stream = match TokioTcpStream::connect(addr).await {
-                Ok(stream) => stream,
+                Ok(stream) => make_timed_stream(stream),
                 Err(e) => {
                     log::error!(
                         "Unable to connect to {} ({}): {}, peer {}",
@@ -275,7 +269,7 @@ pub async fn handle_ss_local(
 
             // 3.1 Connects to ss-remote
             let mut target_stream = match TokioTcpStream::connect(remote_addr).await {
-                Ok(stream) => SsTcpStream::new(stream, method, &key, ctx),
+                Ok(stream) => make_timed_stream(SsTcpStream::new(stream, method, &key, ctx)),
                 Err(e) => {
                     log::error!("Unable to connect to {}: {}, peer {}", remote_addr, e, peer);
                     return;
@@ -308,13 +302,7 @@ where
     A: AsyncRead + AsyncWrite + Unpin + ?Sized,
     B: AsyncRead + AsyncWrite + Unpin + ?Sized,
 {
-    let mut timed_a = TimeoutStream::new(a, Duration::from_secs(constants::DEFAULT_TIMEOUT));
-    let mut timed_b = TimeoutStream::new(b, Duration::from_secs(constants::DEFAULT_TIMEOUT));
-
-    let mut pinned_a = unsafe { Pin::new_unchecked(&mut timed_a) };
-    let mut pinned_b = unsafe { Pin::new_unchecked(&mut timed_b) };
-
-    match tokio::io::copy_bidirectional(&mut pinned_a, &mut pinned_b).await {
+    match tokio::io::copy_bidirectional(a, b).await {
         Ok((atob, btoa)) => log::trace!("{} done: ltor {} bytes, rtol {} bytes", trans, atob, btoa),
         Err(e) => match e.kind() {
             ErrorKind::Other => log::warn!("{} error: {}", trans, e),
@@ -328,16 +316,17 @@ where
     R: AsyncRead + Unpin + ?Sized,
 {
     let mut buf = [0; 2048];
-    let mut timed_reader =
-        TimeoutStream::new(reader, Duration::from_secs(constants::DEFAULT_TIMEOUT));
-    let mut pinned_reader = unsafe { Pin::new_unchecked(&mut timed_reader) };
 
     loop {
-        let n = pinned_reader.read(&mut buf).await?;
+        let n = reader.read(&mut buf).await?;
         if n == 0 {
             break;
         }
     }
 
     Ok(())
+}
+
+fn make_timed_stream<T>(stream: T) -> TimeoutStream<T> {
+    TimeoutStream::new(stream, constants::DEFAULT_TIMEOUT)
 }
