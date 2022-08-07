@@ -111,8 +111,7 @@ pub fn parse() -> Args {
                 .validator(|x| x.parse::<Method>())
                 .help("Encryption method")
                 .possible_values(["chacha20-ietf-poly1305", "aes-128-gcm", "aes-256-gcm"])
-                .default_value("chacha20-ietf-poly1305")
-                .required_unless_present("url"),
+                .default_value("chacha20-ietf-poly1305"),
         )
         .arg(
             Arg::new("acl")
