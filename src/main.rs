@@ -1,8 +1,7 @@
-mod args;
-
 use std::{io::Write, sync::Arc};
 
 use env_logger::{Builder, Env};
+use tokio::process::Child;
 
 use ss_rs::{
     acl::Acl,
@@ -13,7 +12,7 @@ use ss_rs::{
     url::SsUrl,
 };
 
-use tokio::process::Child;
+mod args;
 
 #[tokio::main]
 async fn main() {
