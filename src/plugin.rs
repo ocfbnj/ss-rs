@@ -2,7 +2,8 @@
 
 use std::{
     io::{self, ErrorKind},
-    net::{SocketAddr, TcpListener}, process::Stdio,
+    net::{SocketAddr, TcpListener},
+    process::Stdio,
 };
 
 use tokio::process::{Child, Command};
