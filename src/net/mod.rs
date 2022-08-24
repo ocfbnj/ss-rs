@@ -26,12 +26,12 @@ pub mod constants {
 
 /// Resolves target socket address.
 ///
-/// Returns the first resolved socket address.
+/// Returns the first resolved ipv4 socket address.
 pub async fn lookup_host(host: &str) -> io::Result<SocketAddr> {
-    match tokio::net::lookup_host(host).await {
-        Ok(mut iter) => Ok(iter.next().unwrap()),
-        Err(e) => Err(e),
-    }
+    tokio::net::lookup_host(host)
+        .await?
+        .find(|x| x.is_ipv4())
+        .ok_or(io::Error::from(io::ErrorKind::NotFound))
 }
 
 pub(crate) fn poll_read_exact<R>(
