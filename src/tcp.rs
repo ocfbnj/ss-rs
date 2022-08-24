@@ -265,7 +265,15 @@ pub async fn handle_ss_local(
         _ => {
             trans = format!("{} <=> {}", peer, target_addr);
 
-            log::debug!("Proxy target address: {} -> {}", peer, target_addr);
+            if log::log_enabled!(log::Level::Debug) {
+                let mut str = format!("Proxy target address: {} -> {}", peer, target_addr);
+
+                if let Some(addr) = target_socket_addr {
+                    str.push_str(&format!(" ({})", addr.ip()));
+                }
+
+                log::debug!("{}", str);
+            }
 
             // 3.1 Connects to ss-remote
             let mut target_stream = match TokioTcpStream::connect(remote_addr).await {
