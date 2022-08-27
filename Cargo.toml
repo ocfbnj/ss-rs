@@ -1,6 +1,6 @@
 [package]
 name = "ss-rs"
-version = "0.2.15"
+version = "0.2.16"
 authors = ["ocfbnj"]
 edition = "2021"
 description = "An unofficial shadowsocks implementation that can work with official shadowsocks."
@@ -14,7 +14,7 @@ categories = ["command-line-utilities"]
 
 [profile.release]
 strip = true
-lto = true
+# lto = true
 panic = "abort"
 
 [dependencies]

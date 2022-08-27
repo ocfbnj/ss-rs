@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 name="ss-rs"
 
@@ -19,16 +19,14 @@ read email
 echo -n "Please enter your domain name: "
 read domain_name
 
-# 1. Install cargo.
-if ! command -v cargo; then
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    export PATH="$HOME/.cargo/bin:$PATH"
-else
-    echo "You have already installed cargo"
-fi
+# 1. Install dependencies.
+apt-get update
+apt-get install build-essential socat -y
 
 # 2. Install ss-rs.
-if ! command -v ss-rs; then
+if ! command -v ${name}; then
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    source $HOME/.cargo/env
     cargo install ${name}
 else
     echo "You have already installed ss-rs"
@@ -39,7 +37,7 @@ if ! command -v v2ray-plugin; then
     mkdir -p /usr/local/bin
     version="v1.3.1"
     file_name="v2ray-plugin-linux-amd64-${version}.tar.gz"
-    wget https://github.com/shadowsocks/v2ray-plugin/releases/download/${version}/${file_name}
+    curl -O -sS https://github.com/shadowsocks/v2ray-plugin/releases/download/${version}/${file_name}
     tar -xzf ${file_name}
     mv ./v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
     rm ${file_name}
@@ -47,29 +45,21 @@ else
     echo "You have already installed v2ray-plugin"
 fi
 
-# 4. Install socat.
-if ! command -v socat; then
-    apt-get update
-    apt-get install socat -y
-else
-    echo "You have already installed nginx"
-fi
-
-# 5. Install acme.
+# 4. Install acme.
 if ! test -f ${acme_file}; then
-    curl https://get.acme.sh | sh -s email=${email}
+    curl -sSf https://get.acme.sh | sh -s email=${email}
 else
     echo "File ${acme_file} exists"
 fi
 
-# 6. Generate certificate.
+# 5. Generate certificate.
 if ! test -d "${acme_directory}/${domain_name}"; then
     ${acme_file} --issue -d ${domain_name} --standalone
 else
     echo "Directory ${acme_directory}/${domain_name} exists"
 fi
 
-# 7. Create directories.
+# 6. Create directories.
 if ! test -d "/etc/${name}"; then
     mkdir -p "/etc/${name}"
 else
@@ -82,7 +72,7 @@ else
     echo "Directory /var/log/${name} exists"
 fi
 
-# 8. Create startup script.
+# 7. Create startup script.
 if ! test -f ${ss_remote_start_file}; then
     cat <<EOF > ${ss_remote_start_file}
 #!/bin/bash
@@ -94,7 +84,7 @@ else
     echo "File ${ss_remote_start_file} exists"
 fi
 
-# 9. Create service.
+# 8. Create service.
 if ! test -f ${ss_remote_service_file}; then
     cat <<EOF > ${ss_remote_service_file}
 [Unit]
@@ -112,9 +102,9 @@ else
     echo "File ${ss_remote_service_file} exists"
 fi
 
-# 10. Start service.
+# 9. Start service.
 systemctl daemon-reload
 systemctl enable --now ${ss_remote_service_name}
 
-# 11. Done
+# 10. Done
 echo "== Done =="
