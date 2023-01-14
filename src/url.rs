@@ -5,6 +5,8 @@ use std::{
     str::FromStr,
 };
 
+use base64::{Engine as _, engine::general_purpose};
+
 use crate::crypto::cipher::Method;
 
 /// Represents a SS-URL.
@@ -97,7 +99,7 @@ impl FromStr for SsUrl {
 impl Display for SsUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let s = format!("{}:{}", self.method.to_string(), self.password);
-        let s = base64::encode_config(s, base64::URL_SAFE);
+        let s = general_purpose::URL_SAFE.encode(&s);
         let mut s = format!("ss://{}@{}:{}", s, self.hostname, self.port);
 
         if let Some(ref plugin) = self.plugin {
@@ -123,7 +125,7 @@ fn parse_userinfo(s: &mut &str) -> Result<(Method, String), ErrorKind> {
     };
 
     let userinfo = &s[..pos];
-    let userinfo = match base64::decode_config(userinfo, base64::URL_SAFE) {
+    let userinfo = match general_purpose::URL_SAFE.decode(userinfo) {
         Ok(x) => String::from_utf8(x).unwrap(),
         Err(_) => return Err(ErrorKind::Decode),
     };
