@@ -131,14 +131,6 @@ impl Acl {
             return false;
         }
 
-        if self.bypass_rules.contains(&ip_str) {
-            return true;
-        }
-
-        if self.proxy_rules.contains(&ip_str) {
-            return false;
-        }
-
         self.mode == Mode::BlackList
     }
 
