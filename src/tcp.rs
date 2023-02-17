@@ -233,8 +233,14 @@ pub async fn handle_ss_local(
 
     // 3. Relays target address, bypass or proxy
     let trans: String;
+    let host = target_addr
+        .to_string()
+        .split(':')
+        .next()
+        .map(str::to_owned)
+        .unwrap_or_default();
     match target_socket_addr {
-        Some(addr) if ctx.is_bypass(addr.ip(), Some(&target_addr.to_string())) => {
+        Some(addr) if ctx.is_bypass(addr.ip(), Some(&host)) => {
             trans = format!("{} <=> {} ({})", peer, target_addr, addr.ip());
 
             log::debug!(
