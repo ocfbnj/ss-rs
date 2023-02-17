@@ -109,6 +109,20 @@ impl Acl {
 
     /// Returns true if the given ip or host should be bypassed.
     pub fn is_bypass(&self, ip: IpAddr, host: Option<&str>) -> bool {
+        let ip_str = ip.to_string();
+
+        if let Some(host) = host {
+            if host != ip_str {
+                if self.bypass_rules.contains(host) {
+                    return true;
+                }
+
+                if self.proxy_rules.contains(host) {
+                    return false;
+                }
+            }
+        }
+
         if self.bypass_list.contains(ip) {
             return true;
         }
@@ -117,26 +131,12 @@ impl Acl {
             return false;
         }
 
-        let ip = ip.to_string();
-
-        if self.bypass_rules.contains(&ip) {
+        if self.bypass_rules.contains(&ip_str) {
             return true;
         }
 
-        if self.proxy_rules.contains(&ip) {
+        if self.proxy_rules.contains(&ip_str) {
             return false;
-        }
-
-        if let Some(host) = host {
-            if host != ip {
-                if self.bypass_rules.contains(host) {
-                    return true;
-                }
-
-                if self.proxy_rules.contains(host) {
-                    return true;
-                }
-            }
         }
 
         self.mode == Mode::BlackList
