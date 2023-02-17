@@ -145,14 +145,14 @@ where
                     self.read_state = ReadState::ReadPayloadOut;
                 }
                 ReadState::ReadPayloadOut => {
-                    let buf_len = buf.capacity();
+                    let buf_remaining = buf.remaining();
                     let payload_len = self.in_payload.len();
 
-                    if buf_len >= payload_len {
+                    if buf_remaining >= payload_len {
                         buf.put_slice(&self.in_payload);
                         self.read_state = ReadState::ReadLength;
                     } else {
-                        let (data, remaining) = self.in_payload.split_at(buf_len);
+                        let (data, remaining) = self.in_payload.split_at(buf_remaining);
                         buf.put_slice(data);
                         self.in_payload = remaining.to_owned();
                         self.read_state = ReadState::ReadPayloadOut;
