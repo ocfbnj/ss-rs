@@ -8,5 +8,3 @@ COPY --from=builder /usr/local/cargo/bin/ss-rs /usr/local/bin/
 COPY --from=builder /root/ss-rs/acl /root/acl
 
 EXPOSE 8000
-
-ENTRYPOINT [ "ss-rs" ]
